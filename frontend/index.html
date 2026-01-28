@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>СравнениеДок — Платформа анализа документов</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <a href="/" class="logo">
+            <span class="logo-icon">📄</span>
+            <span class="logo-text">СравнениеДок</span>
+            <span class="logo-badge">Про</span>
+        </a>
+        <div class="nav-menu">
+            <a href="#compare" class="nav-link active" data-view="compare">Сравнение</a>
+            <a href="#merge" class="nav-link" data-view="merge">Слияние</a>
+        </div>
+        <div class="nav-right">
+            <a href="/docs" target="_blank" class="btn btn-outline">Документация</a>
+        </div>
+    </nav>
+
+    <!-- Compare Section -->
+    <section class="section" id="compare">
+        <div class="section-header">
+            <h2 class="section-title">Сравнение документов</h2>
+        </div>
+
+        <!-- Upload Zone -->
+        <div class="upload-zone" id="uploadZone">
+            <div class="upload-icon">📁</div>
+            <h3>Перетащите файлы сюда</h3>
+            <p>или нажмите для выбора</p>
+            <span class="upload-formats">PDF, DOCX, TXT • до 50 МБ</span>
+            <input type="file" id="fileInput" multiple accept=".pdf,.docx,.txt" hidden>
+            <button class="btn btn-outline" onclick="document.getElementById('fileInput').click()">Выбрать файлы</button>
+        </div>
+
+        <!-- Documents List -->
+        <div class="docs-list-compact" id="docsListCompact">
+            <div class="docs-header">
+                <span>Загруженные файлы</span>
+                <span class="doc-count" id="docCount">0 файлов</span>
+            </div>
+            <div class="docs-items" id="docsItems"></div>
+        </div>
+
+        <div class="compare-panel">
+            <div class="compare-selectors">
+                <div class="selector-box">
+                    <label>Документ 1 (Оригинал)</label>
+                    <select id="doc1Select" class="select-input">
+                        <option value="">Выберите документ</option>
+                    </select>
+                </div>
+                <div class="vs-divider">⇋</div>
+                <div class="selector-box">
+                    <label>Документ 2 (Изменённый)</label>
+                    <select id="doc2Select" class="select-input">
+                        <option value="">Выберите документ</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="modes-section">
+                <label>Режим сравнения</label>
+                <div class="modes-grid modes-grid-2">
+                    <button class="mode-btn active" data-mode="line-by-line">
+                        <span class="mode-icon">📝</span>
+                        <span class="mode-name">Построчно</span>
+                        <span class="mode-desc">Классическое сравнение</span>
+                    </button>
+                    <button class="mode-btn" data-mode="semantic">
+                        <span class="mode-icon">🧠</span>
+                        <span class="mode-name">Семантика + AI</span>
+                        <span class="mode-desc">Анализ смысла</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="ai-prompt-section hidden" id="aiPromptSection">
+                <label for="customPrompt">Дополнительный запрос к AI (опционально)</label>
+                <textarea id="customPrompt" class="ai-prompt-input" placeholder="Например: 'Сосредоточься на финансовых изменениях' или 'Оцени юридические риски'" rows="2"></textarea>
+            </div>
+
+            <div class="compare-options">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="showFullDocument">
+                    <span class="checkmark"></span>
+                    Показать полный документ с выделением изменений
+                </label>
+            </div>
+
+            <button class="btn btn-primary btn-large" id="compareBtn" onclick="runComparison()">
+                Сравнить документы
+            </button>
+
+            <!-- Inline Progress & Logs for Compare -->
+            <div class="inline-progress hidden" id="compareProgress">
+                <div class="progress-header-inline">
+                    <span class="progress-title-inline">Обработка...</span>
+                    <span class="progress-percent-inline">0%</span>
+                </div>
+                <div class="progress-bar-inline">
+                    <div class="progress-fill-inline"></div>
+                </div>
+                <div class="log-section">
+                    <div class="log-section-header" onclick="toggleLogSection('compareProgress')">
+                        <span class="log-section-title">
+                            📋 Журнал операций
+                            <span class="log-count">0 записей</span>
+                        </span>
+                        <span class="log-toggle-icon">▼</span>
+                    </div>
+                    <div class="inline-log"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Panel -->
+        <div class="results-panel hidden" id="resultsPanel">
+            <div class="results-header">
+                <h3>Результаты сравнения</h3>
+                <div class="results-stats">
+                    <div class="stat"><span class="stat-value" id="totalChanges">0</span><span class="stat-label">Изменений</span></div>
+                    <div class="stat critical"><span class="stat-value" id="criticalChanges">0</span><span class="stat-label">🔴 Критичных</span></div>
+                    <div class="stat major"><span class="stat-value" id="majorChanges">0</span><span class="stat-label">🟡 Важных</span></div>
+                    <div class="stat minor"><span class="stat-value" id="minorChanges">0</span><span class="stat-label">🟢 Мелких</span></div>
+                    <div class="stat"><span class="stat-value" id="similarity">0%</span><span class="stat-label">Схожесть</span></div>
+                </div>
+            </div>
+
+            <div class="mode-info hidden" id="modeInfo"></div>
+
+            <div class="ai-summary-section hidden" id="aiSummarySection">
+                <div class="ai-summary-header">
+                    <span class="ai-icon">🧠</span>
+                    <h4>Резюме от AI</h4>
+                    <span class="ai-badge" id="aiBadge">GPT</span>
+                </div>
+                <div class="ai-summary-content" id="aiSummaryContent"></div>
+            </div>
+
+            <div class="diff-container" id="diffContainer">
+                <div class="diff-header">
+                    <div class="diff-title-left">
+                        <span class="diff-label">📄 Оригинал</span>
+                        <span class="diff-filename" id="diffFilename1">—</span>
+                    </div>
+                    <div class="diff-title-right">
+                        <span class="diff-label">📄 Изменённый</span>
+                        <span class="diff-filename" id="diffFilename2">—</span>
+                    </div>
+                </div>
+                <div class="diff-table-wrapper">
+                    <table class="diff-table" id="diffTable">
+                        <tbody id="diffBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="diff-legend">
+                <span class="legend-item"><span class="legend-color deleted"></span> Удалено</span>
+                <span class="legend-item"><span class="legend-color added"></span> Добавлено</span>
+                <span class="legend-item"><span class="legend-color modified"></span> Изменено</span>
+                <span class="legend-item"><span class="legend-color unchanged"></span> Без изменений</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Merge Section -->
+    <section class="section hidden" id="merge">
+        <div class="section-header">
+            <h2 class="section-title">Слияние документов</h2>
+        </div>
+
+        <!-- Upload Zone for Merge -->
+        <div class="upload-zone" id="uploadZoneMerge">
+            <div class="upload-icon">📁</div>
+            <h3>Перетащите файлы сюда</h3>
+            <p>или нажмите для выбора</p>
+            <span class="upload-formats">PDF, DOCX, TXT • до 50 МБ</span>
+            <input type="file" id="fileInputMerge" multiple accept=".pdf,.docx,.txt" hidden>
+            <button class="btn btn-outline" onclick="document.getElementById('fileInputMerge').click()">Выбрать файлы</button>
+        </div>
+
+        <div class="merge-panel">
+            <div class="merge-docs-selector">
+                <label>Выберите документы для слияния (2-10)</label>
+                <div class="merge-docs-list" id="mergeDocsList"></div>
+            </div>
+
+            <div class="merge-strategy">
+                <label>Стратегия слияния</label>
+                <div class="strategy-options">
+                    <button class="strategy-btn active" data-strategy="MOST_RECENT">
+                        <span class="strategy-icon">🕐</span>
+                        <span class="strategy-name">Самая новая</span>
+                        <span class="strategy-desc">Последняя версия имеет приоритет</span>
+                    </button>
+                    <button class="strategy-btn" data-strategy="MANUAL">
+                        <span class="strategy-icon">✋</span>
+                        <span class="strategy-name">Вручную</span>
+                        <span class="strategy-desc">Проверка всех конфликтов</span>
+                    </button>
+                </div>
+            </div>
+
+            <button class="btn btn-primary btn-large" onclick="startMerge()">Начать слияние</button>
+
+            <!-- Inline Progress & Logs for Merge -->
+            <div class="inline-progress hidden" id="mergeProgress">
+                <div class="progress-header-inline">
+                    <span class="progress-title-inline">Обработка...</span>
+                    <span class="progress-percent-inline">0%</span>
+                </div>
+                <div class="progress-bar-inline">
+                    <div class="progress-fill-inline"></div>
+                </div>
+                <div class="log-section">
+                    <div class="log-section-header" onclick="toggleLogSection('mergeProgress')">
+                        <span class="log-section-title">
+                            📋 Журнал операций
+                            <span class="log-count">0 записей</span>
+                        </span>
+                        <span class="log-toggle-icon">▼</span>
+                    </div>
+                    <div class="inline-log"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Merge Results -->
+        <div class="merge-results hidden" id="mergeResults">
+            <div class="merge-header">
+                <h3>Результаты слияния</h3>
+                <div class="merge-stats">
+                    <span class="merge-stat"><strong id="mergeConflicts">0</strong> Конфликтов</span>
+                    <span class="merge-stat success"><strong id="mergeAutoResolved">0</strong> Авто-разрешено</span>
+                </div>
+            </div>
+
+            <div class="conflicts-list" id="conflictsList"></div>
+
+            <div class="merge-actions">
+                <button class="btn btn-outline" onclick="cancelMerge()">Отменить</button>
+                <button class="btn btn-primary" id="finalizeMergeBtn" onclick="finalizeMerge()">Завершить слияние</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-logo">
+                <span class="logo-icon">📄</span> СравнениеДок Платформа
+            </div>
+            <div class="footer-links">
+                <a href="/docs" target="_blank">Документация</a>
+                <a href="/api/v1/health" target="_blank">Статус системы</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
