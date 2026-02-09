@@ -11,9 +11,11 @@ import uuid
 
 from database import get_db
 from models.document import Document, DocumentVersion
+from models.user import User
 from models.comparison import DocumentMerge, MergeStatus
 from services.merge_engine import MergeEngine
 from services.audit_service import get_audit_service
+from services.auth_service import get_current_user
 
 router = APIRouter()
 
@@ -64,8 +66,12 @@ class BulkResolveRequest(BaseModel):
 
 
 @router.post("/", response_model=MergeResponse)
-async def create_merge(request: MergeRequest, db: Session = Depends(get_db)):
-    """Start a merge operation"""
+async def create_merge(
+    request: MergeRequest, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Start a merge operation (auth required, validates document ownership)"""
     if request.merge_strategy not in MERGE_STRATEGIES:
         raise HTTPException(
             status_code=400, 
@@ -84,10 +90,13 @@ async def create_merge(request: MergeRequest, db: Session = Depends(get_db)):
             detail="Maximum 10 documents can be merged at once"
         )
     
-    # Collect document contents
+    # Collect document contents (validate ownership)
     contents = []
     for doc_id in request.document_ids:
-        doc = db.query(Document).filter(Document.id == doc_id).first()
+        doc = db.query(Document).filter(
+            Document.id == doc_id,
+            Document.uploaded_by == current_user.id
+        ).first()
         if doc:
             contents.append({
                 "id": doc_id, 
@@ -97,13 +106,21 @@ async def create_merge(request: MergeRequest, db: Session = Depends(get_db)):
         else:
             version = db.query(DocumentVersion).filter(DocumentVersion.id == doc_id).first()
             if version:
-                contents.append({
-                    "id": doc_id, 
-                    "content": version.content or "", 
-                    "name": f"Version {version.version_number}"
-                })
+                # Check ownership via parent document
+                parent_doc = db.query(Document).filter(
+                    Document.id == version.document_id,
+                    Document.uploaded_by == current_user.id
+                ).first()
+                if parent_doc:
+                    contents.append({
+                        "id": doc_id, 
+                        "content": version.content or "", 
+                        "name": f"Version {version.version_number}"
+                    })
+                else:
+                    raise HTTPException(status_code=404, detail=f"Document {doc_id} not found or access denied")
             else:
-                raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
+                raise HTTPException(status_code=404, detail=f"Document {doc_id} not found or access denied")
     
     # Perform merge
     merge_engine = MergeEngine()
@@ -179,22 +196,36 @@ async def create_merge(request: MergeRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/preview")
-async def preview_merge(request: MergeRequest, db: Session = Depends(get_db)):
-    """Preview merge without saving"""
+async def preview_merge(
+    request: MergeRequest, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Preview merge without saving (auth required)"""
     if len(request.document_ids) < 2:
         raise HTTPException(status_code=400, detail="At least 2 documents required")
     
     contents = []
     for doc_id in request.document_ids:
-        doc = db.query(Document).filter(Document.id == doc_id).first()
+        doc = db.query(Document).filter(
+            Document.id == doc_id,
+            Document.uploaded_by == current_user.id
+        ).first()
         if doc:
             contents.append({"id": doc_id, "content": doc.extracted_text or "", "name": doc.name})
         else:
             version = db.query(DocumentVersion).filter(DocumentVersion.id == doc_id).first()
             if version:
-                contents.append({"id": doc_id, "content": version.content or "", "name": f"Version {version.version_number}"})
+                parent_doc = db.query(Document).filter(
+                    Document.id == version.document_id,
+                    Document.uploaded_by == current_user.id
+                ).first()
+                if parent_doc:
+                    contents.append({"id": doc_id, "content": version.content or "", "name": f"Version {version.version_number}"})
+                else:
+                    raise HTTPException(status_code=404, detail=f"Document {doc_id} not found or access denied")
             else:
-                raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
+                raise HTTPException(status_code=404, detail=f"Document {doc_id} not found or access denied")
     
     merge_engine = MergeEngine()
     result = merge_engine.preview_merge(contents, request.merge_strategy)

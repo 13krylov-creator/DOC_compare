@@ -11,7 +11,9 @@ import io
 
 from database import get_db
 from models.document import Document, DocumentVersion, DocumentStatus
+from models.user import User
 from services.document_processor import DocumentProcessor
+from services.auth_service import get_current_user, get_current_user_optional
 from config import settings
 
 router = APIRouter()
@@ -51,7 +53,6 @@ class DocumentListResponse(BaseModel):
     page: int
     page_size: int
 
-# No authentication required - simple public API
 
 @router.post("/upload", response_model=DocumentResponse)
 async def upload_document(
@@ -59,9 +60,10 @@ async def upload_document(
     name: Optional[str] = None,
     description: Optional[str] = None,
     folder: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Upload a new document (no auth required)"""
+    """Upload a new document (auth required)"""
     # Validate file extension
     ext = file.filename.split(".")[-1].lower() if "." in file.filename else ""
     if ext not in settings.ALLOWED_EXTENSIONS:
@@ -88,16 +90,17 @@ async def upload_document(
     processor = DocumentProcessor()
     extracted_text, page_count = processor.extract_text(file_path, ext)
     
-    # Create document (no tenant/user)
+    # Create document with user ownership
     doc = Document(
         id=file_id,
-        tenant_id="default",
+        tenant_id=current_user.tenant_id or "default",
         name=name or file.filename,
         description=description,
         file_path=file_path,
         original_filename=file.filename,
         file_size=len(content),
         page_count=page_count,
+        uploaded_by=current_user.id,  # Set document owner
         uploaded_at=datetime.utcnow(),
         status=DocumentStatus.READY.value,
         content_hash=content_hash,
@@ -113,6 +116,7 @@ async def upload_document(
         version_number=1,
         content=extracted_text,
         file_path=file_path,
+        created_by=current_user.id,
         created_at=datetime.utcnow()
     )
     db.add(version)
@@ -140,10 +144,15 @@ async def list_documents(
     page_size: int = Query(20, ge=1, le=100),
     folder: Optional[str] = None,
     search: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """List all documents (no auth required)"""
-    query = db.query(Document).filter(Document.is_archived == "false")
+    """List documents for current user (auth required)"""
+    # Filter by current user's documents only
+    query = db.query(Document).filter(
+        Document.is_archived == "false",
+        Document.uploaded_by == current_user.id  # Only user's own documents
+    )
     
     # Filter by folder
     if folder:
@@ -182,9 +191,16 @@ async def list_documents(
     )
 
 @router.get("/{document_id}", response_model=DocumentResponse)
-async def get_document(document_id: str, db: Session = Depends(get_db)):
-    """Get document by ID"""
-    doc = db.query(Document).filter(Document.id == document_id).first()
+async def get_document(
+    document_id: str, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get document by ID (auth required, owner only)"""
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.uploaded_by == current_user.id
+    ).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     
@@ -203,9 +219,16 @@ async def get_document(document_id: str, db: Session = Depends(get_db)):
     )
 
 @router.delete("/{document_id}")
-async def delete_document(document_id: str, db: Session = Depends(get_db)):
-    """Delete (archive) document"""
-    doc = db.query(Document).filter(Document.id == document_id).first()
+async def delete_document(
+    document_id: str, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete (archive) document (auth required, owner only)"""
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.uploaded_by == current_user.id
+    ).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     
@@ -215,9 +238,16 @@ async def delete_document(document_id: str, db: Session = Depends(get_db)):
     return {"message": "Document archived", "id": document_id}
 
 @router.get("/{document_id}/versions", response_model=List[DocumentVersionResponse])
-async def get_versions(document_id: str, db: Session = Depends(get_db)):
-    """Get all versions of a document"""
-    doc = db.query(Document).filter(Document.id == document_id).first()
+async def get_versions(
+    document_id: str, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all versions of a document (auth required, owner only)"""
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.uploaded_by == current_user.id
+    ).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     
@@ -236,9 +266,16 @@ async def get_versions(document_id: str, db: Session = Depends(get_db)):
     ]
 
 @router.get("/{document_id}/timeline", response_model=TimelineResponse)
-async def get_timeline(document_id: str, db: Session = Depends(get_db)):
-    """Get timeline visualization data for a document"""
-    doc = db.query(Document).filter(Document.id == document_id).first()
+async def get_timeline(
+    document_id: str, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get timeline visualization data for a document (auth required, owner only)"""
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.uploaded_by == current_user.id
+    ).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     
@@ -261,9 +298,16 @@ async def get_timeline(document_id: str, db: Session = Depends(get_db)):
     )
 
 @router.get("/{document_id}/content")
-async def get_document_content(document_id: str, db: Session = Depends(get_db)):
-    """Get extracted text content of a document"""
-    doc = db.query(Document).filter(Document.id == document_id).first()
+async def get_document_content(
+    document_id: str, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get extracted text content of a document (auth required, owner only)"""
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.uploaded_by == current_user.id
+    ).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     
@@ -276,11 +320,18 @@ async def get_document_content(document_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{document_id}/download")
-async def download_document(document_id: str, db: Session = Depends(get_db)):
-    """Download document as DOCX file"""
+async def download_document(
+    document_id: str, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Download document as DOCX file (auth required, owner only)"""
     from urllib.parse import quote
     
-    doc = db.query(Document).filter(Document.id == document_id).first()
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.uploaded_by == current_user.id
+    ).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     

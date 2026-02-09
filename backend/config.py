@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     
+    # Keycloak OIDC Settings
+    KEYCLOAK_SERVER_URL: str = os.getenv("KEYCLOAK_SERVER_URL", "https://auth.nir.center")
+    KEYCLOAK_REALM: str = os.getenv("KEYCLOAK_REALM", "platform")
+    KEYCLOAK_CLIENT_ID: str = os.getenv("KEYCLOAK_CLIENT_ID", "oauth2-proxy")
+    KEYCLOAK_CLIENT_SECRET: str = os.getenv("KEYCLOAK_CLIENT_SECRET", "mZsGFiHJG59MH0rrOVPlgtdtBHH9zf3d")
+    
     # ML Services
     ML_HOST_GPT: str = os.getenv("ML_HOST_GPT", "10.109.50.250:1212")
     ML_MODEL_GPT: str = os.getenv("ML_MODEL_GPT", "openai/gpt-oss-20b")

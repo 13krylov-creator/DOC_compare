@@ -5,6 +5,7 @@ from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+import uuid
 
 from config import settings
 from database import get_db
@@ -39,12 +40,14 @@ def decode_token(token: str) -> Optional[dict]:
     except JWTError:
         return None
 
+
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ):
-    """Get current user from token"""
-    from models.user import User
+    """Get current user from token (supports both local JWT and Keycloak tokens)"""
+    from models.user import User, Tenant
+    from services.keycloak_service import get_keycloak_service
     
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -55,22 +58,90 @@ async def get_current_user(
     if not token:
         raise credentials_exception
     
-    payload = decode_token(token)
-    if payload is None:
-        raise credentials_exception
+    # Check if this is a Keycloak token (RS256) or local JWT (HS256)
+    keycloak_service = get_keycloak_service()
     
-    user_id: str = payload.get("sub")
-    if user_id is None:
-        raise credentials_exception
-    
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None:
-        raise credentials_exception
-    
-    return user
+    if keycloak_service.is_keycloak_token(token):
+        # Validate Keycloak token
+        payload = await keycloak_service.validate_token(token)
+        if payload is None:
+            raise credentials_exception
+        
+        # Extract user info from Keycloak claims
+        user_info = keycloak_service.extract_user_info(payload)
+        keycloak_user_id = user_info.get("sub")
+        email = user_info.get("email")
+        username = user_info.get("preferred_username") or email
+        full_name = user_info.get("name")
+        
+        if not keycloak_user_id:
+            raise credentials_exception
+        
+        # Find or create local user
+        # We use keycloak_user_id (sub claim) as our user id
+        user = db.query(User).filter(User.id == keycloak_user_id).first()
+        
+        if not user:
+            # Create new user from Keycloak claims
+            user = User(
+                id=keycloak_user_id,
+                email=email or f"{username}@keycloak",
+                username=username or keycloak_user_id[:20],
+                hashed_password="",  # No local password for Keycloak users
+                full_name=full_name,
+                role="user",
+                is_active="true",
+                created_at=datetime.utcnow()
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        else:
+            # Update user info from Keycloak if changed
+            updated = False
+            if email and user.email != email:
+                user.email = email
+                updated = True
+            if full_name and user.full_name != full_name:
+                user.full_name = full_name
+                updated = True
+            if updated:
+                user.updated_at = datetime.utcnow()
+                db.commit()
+        
+        return user
+    else:
+        # Local JWT token
+        payload = decode_token(token)
+        if payload is None:
+            raise credentials_exception
+        
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+        
+        user = db.query(User).filter(User.id == user_id).first()
+        if user is None:
+            raise credentials_exception
+        
+        return user
+
 
 async def get_current_active_user(current_user = Depends(get_current_user)):
     """Get current active user"""
     if current_user.is_active != "true":
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
+
+
+async def get_current_user_optional(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+):
+    """Get current user if authenticated, None otherwise (for optional auth endpoints)"""
+    if not token:
+        return None
+    try:
+        return await get_current_user(token, db)
+    except HTTPException:
+        return None

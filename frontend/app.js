@@ -11,11 +11,83 @@ let state = {
     lastMergedDocumentId: null
 };
 
+// Keycloak instance
+let keycloak = null;
+
+// Initialize Keycloak authentication
+async function initKeycloak() {
+    keycloak = new Keycloak({
+        url: 'https://auth.nir.center',
+        realm: 'platform',
+        clientId: 'oauth2-proxy'
+    });
+
+    try {
+        const authenticated = await keycloak.init({
+            onLoad: 'login-required',
+            checkLoginIframe: false,
+            pkceMethod: 'S256'
+        });
+
+        if (authenticated) {
+            console.log('User authenticated via Keycloak');
+            updateUserInfo();
+            loadDocuments();
+            setupEventListeners();
+            showView('compare');
+
+            // Auto-refresh token
+            setInterval(() => {
+                keycloak.updateToken(60).catch(() => {
+                    console.log('Token refresh failed, logging out');
+                    keycloak.logout();
+                });
+            }, 30000);
+        } else {
+            console.log('Not authenticated');
+            keycloak.login();
+        }
+    } catch (error) {
+        console.error('Keycloak init error:', error);
+        showToast('Ошибка авторизации. Попробуйте обновить страницу.', 'error');
+    }
+}
+
+// Update user info in navbar
+function updateUserInfo() {
+    const userInfoEl = document.getElementById('userInfo');
+    const userNameEl = document.getElementById('userName');
+
+    if (keycloak && keycloak.authenticated && keycloak.tokenParsed) {
+        const name = keycloak.tokenParsed.name ||
+            keycloak.tokenParsed.preferred_username ||
+            keycloak.tokenParsed.email ||
+            'Пользователь';
+        userNameEl.textContent = name;
+        userInfoEl.classList.remove('hidden');
+    } else {
+        userInfoEl.classList.add('hidden');
+    }
+}
+
+// Logout function
+function logout() {
+    if (keycloak) {
+        keycloak.logout({ redirectUri: window.location.origin });
+    }
+}
+
+// Get authorization header for API calls
+function getAuthHeader() {
+    if (keycloak && keycloak.authenticated && keycloak.token) {
+        return { 'Authorization': 'Bearer ' + keycloak.token };
+    }
+    return {};
+}
+
 // Инициализация
 document.addEventListener('DOMContentLoaded', () => {
-    loadDocuments();
-    setupEventListeners();
-    showView('compare');
+    initKeycloak();
 });
 
 function setupEventListeners() {
@@ -77,12 +149,12 @@ function setupUploadZone(zoneId, inputId) {
 
 function showView(viewId) {
     state.currentView = viewId;
-    
+
     // Скрыть все секции
     document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
     // Показать выбранную
     document.getElementById(viewId)?.classList.remove('hidden');
-    
+
     // Обновить навигацию
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
     document.querySelector(`[data-view="${viewId}"]`)?.classList.add('active');
@@ -92,29 +164,29 @@ function showView(viewId) {
 function showInlineProgress(containerId, title) {
     const container = document.getElementById(containerId);
     if (!container) return;
-    
+
     container.classList.remove('hidden');
     container.querySelector('.progress-title-inline').textContent = title;
     container.querySelector('.progress-percent-inline').textContent = '0%';
     container.querySelector('.progress-fill-inline').style.width = '0%';
     container.querySelector('.inline-log').innerHTML = '';
-    
+
     // Collapse log section by default
     const logSection = container.querySelector('.log-section');
     if (logSection) {
         logSection.classList.remove('expanded');
     }
-    
+
     addInlineLog(containerId, `🚀 Начало: ${title}`);
 }
 
 function updateInlineProgress(containerId, percent, message) {
     const container = document.getElementById(containerId);
     if (!container) return;
-    
+
     container.querySelector('.progress-percent-inline').textContent = `${percent}%`;
     container.querySelector('.progress-fill-inline').style.width = `${percent}%`;
-    
+
     if (message) {
         container.querySelector('.progress-title-inline').textContent = message;
     }
@@ -123,23 +195,23 @@ function updateInlineProgress(containerId, percent, message) {
 function addInlineLog(containerId, message, type = 'info') {
     const container = document.getElementById(containerId);
     if (!container) return;
-    
+
     const logContainer = container.querySelector('.inline-log');
     const time = new Date().toLocaleTimeString('ru-RU');
     const entry = document.createElement('div');
     entry.className = `log-entry ${type}`;
-    
+
     let icon = 'ℹ️';
     if (type === 'error') icon = '❌';
     else if (type === 'success') icon = '✅';
     else if (type === 'warning') icon = '⚠️';
     else if (type === 'ai') icon = '🧠';
     else if (type === 'ocr') icon = '📷';
-    
+
     entry.innerHTML = `<span class="log-time">[${time}]</span> ${icon} ${message}`;
     logContainer.appendChild(entry);
     logContainer.scrollTop = logContainer.scrollHeight;
-    
+
     // Update log count
     const logCount = container.querySelector('.log-count');
     if (logCount) {
@@ -151,7 +223,7 @@ function addInlineLog(containerId, message, type = 'info') {
 function toggleLogSection(containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
-    
+
     const logSection = container.querySelector('.log-section');
     if (logSection) {
         logSection.classList.toggle('expanded');
@@ -161,12 +233,12 @@ function toggleLogSection(containerId) {
 function clearInlineProgress(containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
-    
+
     container.querySelector('.progress-title-inline').textContent = 'Обработка...';
     container.querySelector('.progress-percent-inline').textContent = '0%';
     container.querySelector('.progress-fill-inline').style.width = '0%';
     container.querySelector('.inline-log').innerHTML = '';
-    
+
     const logCount = container.querySelector('.log-count');
     if (logCount) {
         logCount.textContent = '0 записей';
@@ -182,7 +254,9 @@ function completeInlineProgress(containerId, message) {
 // ===================== ДОКУМЕНТЫ =====================
 async function loadDocuments() {
     try {
-        const response = await fetch(`${API_BASE}/documents/`);
+        const response = await fetch(`${API_BASE}/documents/`, {
+            headers: { ...getAuthHeader() }
+        });
         if (response.ok) {
             const data = await response.json();
             state.documents = data.documents || [];
@@ -202,9 +276,9 @@ async function loadDocuments() {
 function renderDocumentsCompact() {
     const container = document.getElementById('docsItems');
     const count = document.getElementById('docCount');
-    
+
     if (!container) return;
-    
+
     count.textContent = `${state.documents.length} файлов`;
 
     if (state.documents.length === 0) {
@@ -230,40 +304,41 @@ function getFileIcon(type) {
 
 async function uploadFiles(files) {
     const progressId = state.currentView === 'merge' ? 'mergeProgress' : 'compareProgress';
-    
+
     for (const file of files) {
         showInlineProgress(progressId, `Загрузка: ${file.name}`);
-        
+
         try {
             // Проверка файла
             addInlineLog(progressId, `Проверка файла: ${file.name}`);
             updateInlineProgress(progressId, 10, 'Проверка формата...');
-            
+
             const allowedTypes = ['.pdf', '.docx', '.txt'];
             const ext = '.' + file.name.split('.').pop().toLowerCase();
             if (!allowedTypes.includes(ext)) {
                 addInlineLog(progressId, `Неподдерживаемый формат: ${ext}`, 'error');
                 continue;
             }
-            
+
             if (file.size > 50 * 1024 * 1024) {
                 addInlineLog(progressId, `Файл слишком большой: ${formatSize(file.size)}`, 'error');
                 continue;
             }
-            
+
             addInlineLog(progressId, `Формат OK: ${ext}, размер: ${formatSize(file.size)}`, 'success');
             updateInlineProgress(progressId, 20, 'Загрузка на сервер...');
-            
+
             // Загрузка
             addInlineLog(progressId, 'Отправка файла на сервер...');
-            
+
             const formData = new FormData();
             formData.append('file', file);
             formData.append('name', file.name);
 
             const response = await fetch(`${API_BASE}/documents/upload`, {
                 method: 'POST',
-                body: formData
+                body: formData,
+                headers: { ...getAuthHeader() }
             });
 
             if (!response.ok) {
@@ -271,41 +346,41 @@ async function uploadFiles(files) {
                 addInlineLog(progressId, `Ошибка сервера: ${err.detail || response.statusText}`, 'error');
                 continue;
             }
-            
+
             const result = await response.json();
             addInlineLog(progressId, `Файл загружен, ID: ${result.id}`, 'success');
-            
+
             // OCR обработка (если PDF)
             if (ext === '.pdf') {
                 updateInlineProgress(progressId, 50, 'OCR распознавание...');
                 addInlineLog(progressId, 'Запуск OCR для распознавания текста...', 'ocr');
                 addInlineLog(progressId, 'Отправка запроса к Chandra Vision API...', 'ocr');
-                
+
                 // Симуляция OCR (реальная обработка на сервере)
                 await new Promise(r => setTimeout(r, 500));
-                
+
                 if (result.extracted_text) {
                     addInlineLog(progressId, `OCR завершён, извлечено ${result.extracted_text.length} символов`, 'success');
                 } else {
                     addInlineLog(progressId, 'OCR: текст не найден или документ пустой', 'warning');
                 }
             }
-            
+
             // Индексация
             updateInlineProgress(progressId, 80, 'Индексация...');
             addInlineLog(progressId, 'Сохранение в базу данных...');
             await new Promise(r => setTimeout(r, 300));
             addInlineLog(progressId, 'Создание поисковых индексов...', 'success');
-            
+
             completeInlineProgress(progressId, `✅ ${file.name} успешно загружен`);
             showToast(`✓ ${file.name} загружен`, 'success');
-            
+
         } catch (error) {
             addInlineLog(progressId, `Критическая ошибка: ${error.message}`, 'error');
             showToast(`Ошибка загрузки ${file.name}`, 'error');
         }
     }
-    
+
     // Progress logs remain visible - user can collapse them
     loadDocuments();
 }
@@ -313,7 +388,10 @@ async function uploadFiles(files) {
 async function deleteDocument(id) {
     if (!confirm('Удалить этот документ?')) return;
     try {
-        await fetch(`${API_BASE}/documents/${id}`, { method: 'DELETE' });
+        await fetch(`${API_BASE}/documents/${id}`, {
+            method: 'DELETE',
+            headers: { ...getAuthHeader() }
+        });
         showToast('Документ удалён', 'success');
         loadDocuments();
     } catch (error) {
@@ -328,7 +406,7 @@ function populateSelects() {
 
     const doc1 = document.getElementById('doc1Select');
     const doc2 = document.getElementById('doc2Select');
-    
+
     if (doc1) doc1.innerHTML = defaultOpt + options;
     if (doc2) doc2.innerHTML = defaultOpt + options;
 }
@@ -342,42 +420,42 @@ async function runComparison() {
 
     const progressId = 'compareProgress';
     const modeLabel = state.selectedMode === 'semantic' ? 'Семантический + AI' : 'Построчный';
-    
+
     // Clear previous logs before starting
     clearInlineProgress(progressId);
     showInlineProgress(progressId, `Сравнение (${modeLabel})`);
-    
+
     try {
         // Загрузка документов
         addInlineLog(progressId, 'Загрузка содержимого документов...');
         updateInlineProgress(progressId, 10, 'Загрузка документов...');
-        
+
         const doc1Name = state.documents.find(d => d.id === doc1)?.name || 'Документ 1';
         const doc2Name = state.documents.find(d => d.id === doc2)?.name || 'Документ 2';
-        
+
         addInlineLog(progressId, `Документ 1: ${doc1Name}`);
         addInlineLog(progressId, `Документ 2: ${doc2Name}`);
-        
+
         // Токенизация
         updateInlineProgress(progressId, 25, 'Токенизация текста...');
         addInlineLog(progressId, 'Разбивка текста на токены для анализа...');
-        
+
         // AI анализ (для семантического режима)
         if (state.selectedMode === 'semantic') {
             updateInlineProgress(progressId, 40, 'AI анализ...');
             addInlineLog(progressId, '🧠 Запуск семантического анализа...', 'ai');
             addInlineLog(progressId, 'Подключение к GPT API...', 'ai');
-            
+
             const customPrompt = document.getElementById('customPrompt')?.value || '';
             if (customPrompt) {
                 addInlineLog(progressId, `Пользовательский промпт: "${customPrompt.substring(0, 50)}..."`, 'ai');
             }
         }
-        
+
         // Выполнение сравнения
         updateInlineProgress(progressId, 50, 'Выполнение сравнения...');
         addInlineLog(progressId, 'Отправка запроса на сервер...');
-        
+
         const showFullDoc = document.getElementById('showFullDocument')?.checked ?? false;
         const customPrompt = document.getElementById('customPrompt')?.value || '';
 
@@ -385,7 +463,10 @@ async function runComparison() {
 
         const requestOptions = {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeader()
+            }
         };
 
         if (state.selectedMode === 'semantic' && customPrompt.trim()) {
@@ -393,7 +474,7 @@ async function runComparison() {
         }
 
         const response = await fetch(url, requestOptions);
-        
+
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             addInlineLog(progressId, `Ошибка сервера: ${response.status} ${response.statusText}`, 'error');
@@ -402,11 +483,11 @@ async function runComparison() {
             }
             throw new Error(errorData.detail || 'Ошибка сравнения');
         }
-        
+
         const result = await response.json();
-        
+
         addInlineLog(progressId, `Получен ответ от сервера`, 'success');
-        
+
         // Логирование результатов AI
         if (state.selectedMode === 'semantic') {
             if (result.ai_enhanced) {
@@ -414,27 +495,27 @@ async function runComparison() {
             } else {
                 addInlineLog(progressId, '⚠️ AI недоступен, использован автоматический анализ', 'warning');
             }
-            
+
             if (result.ai_summary) {
                 addInlineLog(progressId, `AI резюме: ${result.ai_summary.substring(0, 100)}...`, 'ai');
             }
         }
-        
+
         // Классификация изменений
         updateInlineProgress(progressId, 80, 'Классификация изменений...');
         addInlineLog(progressId, `Найдено изменений: ${result.summary?.total_changes || 0}`);
         addInlineLog(progressId, `🔴 Критичных: ${result.summary?.critical_changes || 0}`);
         addInlineLog(progressId, `🟡 Важных: ${result.summary?.major_changes || 0}`);
         addInlineLog(progressId, `🟢 Мелких: ${result.summary?.minor_changes || 0}`);
-        
+
         // Формирование отчёта
         updateInlineProgress(progressId, 95, 'Формирование отчёта...');
         addInlineLog(progressId, 'Построение визуализации различий...');
-        
+
         completeInlineProgress(progressId, '✅ Сравнение завершено');
-        
+
         renderResults(result);
-        
+
     } catch (error) {
         addInlineLog(progressId, `❌ Критическая ошибка: ${error.message}`, 'error');
         showToast('Ошибка сравнения', 'error');
@@ -484,14 +565,14 @@ function renderResults(result) {
     }
 
     renderSideBySideDiff(result);
-    
+
     // Прокрутка к результатам
     document.getElementById('resultsPanel').scrollIntoView({ behavior: 'smooth' });
 }
 
 function renderSideBySideDiff(result) {
     const diffBody = document.getElementById('diffBody');
-    
+
     // Fallback to old panes if table not found
     const leftPane = document.getElementById('diffLeft');
     const rightPane = document.getElementById('diffRight');
@@ -499,7 +580,7 @@ function renderSideBySideDiff(result) {
     if (result.diff_lines) {
         const leftLines = result.diff_lines.left;
         const rightLines = result.diff_lines.right;
-        
+
         // Use table for synchronized row heights
         if (diffBody) {
             let html = '';
@@ -526,7 +607,7 @@ function renderSideBySideDiff(result) {
             diffBody.innerHTML = html;
             return;
         }
-        
+
         // Fallback to old method
         if (leftPane && rightPane) {
             leftPane.innerHTML = leftLines.map(line => `
@@ -734,7 +815,7 @@ async function startMerge() {
         'MOST_RECENT': 'Последняя версия',
         'MANUAL': 'Вручную'
     }[state.selectedStrategy] || state.selectedStrategy;
-    
+
     // Clear previous logs before starting
     clearInlineProgress(progressId);
     showInlineProgress(progressId, `Слияние (${strategyLabel})`);
@@ -743,24 +824,27 @@ async function startMerge() {
         // Загрузка документов
         addInlineLog(progressId, `Выбрано документов: ${state.selectedMergeDocs.length}`);
         updateInlineProgress(progressId, 10, 'Загрузка документов...');
-        
+
         state.selectedMergeDocs.forEach((id, i) => {
             const doc = state.documents.find(d => d.id === id);
             addInlineLog(progressId, `${i + 1}. ${doc?.name || id}`);
         });
-        
+
         // Сравнение
         updateInlineProgress(progressId, 30, 'Сравнение документов...');
         addInlineLog(progressId, 'Анализ различий между документами...');
-        
+
         // Выполнение слияния
         updateInlineProgress(progressId, 50, 'Выполнение слияния...');
         addInlineLog(progressId, `Стратегия: ${strategyLabel}`);
         addInlineLog(progressId, 'Отправка запроса на сервер...');
-        
+
         const response = await fetch(`${API_BASE}/merge/`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeader()
+            },
             body: JSON.stringify({
                 document_ids: state.selectedMergeDocs,
                 merge_strategy: state.selectedStrategy
@@ -775,23 +859,23 @@ async function startMerge() {
             }
             throw new Error(errorData.detail || 'Ошибка слияния');
         }
-        
+
         const result = await response.json();
-        
+
         addInlineLog(progressId, `Слияние выполнено, ID: ${result.id}`, 'success');
-        
+
         // Обнаружение конфликтов
         updateInlineProgress(progressId, 80, 'Анализ конфликтов...');
         addInlineLog(progressId, `Найдено конфликтов: ${result.conflicts_count || 0}`);
-        
+
         // In MANUAL mode, auto_resolved is always 0 - user decides everything
         if (state.selectedStrategy === 'MOST_RECENT') {
             addInlineLog(progressId, `Авто-разрешено: ${result.auto_resolved || 0}`);
         }
-        
+
         // Count unresolved conflicts
         const unresolvedCount = result.conflicts.filter(c => c.consensus_variant === null || c.consensus_variant === undefined).length;
-        
+
         if (state.selectedStrategy === 'MANUAL') {
             if (result.conflicts_count > 0) {
                 addInlineLog(progressId, `✋ Режим "Вручную": ${result.conflicts_count} изменений требуют вашего выбора`, 'warning');
@@ -805,13 +889,13 @@ async function startMerge() {
         } else {
             addInlineLog(progressId, '✅ Конфликтов нет, слияние готово', 'success');
         }
-        
+
         if (result.recommendation) {
             addInlineLog(progressId, `💡 Рекомендация: ${result.recommendation}`);
         }
-        
+
         completeInlineProgress(progressId, '✅ Слияние завершено');
-        
+
         state.currentMergeId = result.id;
         renderMergeResults(result);
 
@@ -825,7 +909,7 @@ async function startMerge() {
 function renderMergeResults(result) {
     document.getElementById('mergeResults').classList.remove('hidden');
     document.getElementById('mergeConflicts').textContent = result.conflicts_count;
-    
+
     // In MANUAL mode, auto_resolved is always 0 - show only in MOST_RECENT mode
     const autoResolvedEl = document.getElementById('mergeAutoResolved');
     const autoResolvedStat = autoResolvedEl.closest('.merge-stat');
@@ -840,13 +924,13 @@ function renderMergeResults(result) {
 
     // Check if we have unresolved conflicts (no consensus_variant set)
     const unresolvedConflicts = result.conflicts.filter(c => c.consensus_variant === null || c.consensus_variant === undefined);
-    
+
     if (result.conflicts.length === 0) {
         conflictsList.innerHTML = '<div class="no-conflicts"><span class="success-icon">✅</span> Конфликтов нет! Готово к завершению.</div>';
         document.getElementById('finalizeMergeBtn').disabled = false;
         return;
     }
-    
+
     // If MANUAL strategy - show ALL conflicts for user to choose (no auto-resolve)
     // If MOST_RECENT strategy - show only unresolved conflicts
     if (state.selectedStrategy === 'MANUAL') {
@@ -913,7 +997,7 @@ function renderMergeResults(result) {
     }
 
     updateFinalizeBtnState();
-    
+
     // Прокрутка к результатам
     document.getElementById('mergeResults').scrollIntoView({ behavior: 'smooth' });
 }
@@ -976,15 +1060,18 @@ async function finalizeMerge() {
             addInlineLog(progressId, `Применение ${resolutions.length} разрешений конфликтов...`);
             const resolveResponse = await fetch(`${API_BASE}/merge/${state.currentMergeId}/resolve-bulk`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeader()
+                },
                 body: JSON.stringify({ resolutions })
             });
-            
+
             if (!resolveResponse.ok) {
                 const err = await resolveResponse.json().catch(() => ({}));
                 throw new Error(err.detail || 'Ошибка разрешения конфликтов');
             }
-            
+
             addInlineLog(progressId, 'Конфликты разрешены', 'success');
         }
 
@@ -994,9 +1081,10 @@ async function finalizeMerge() {
         const dateStr = now.toLocaleDateString('ru-RU');
         const timeStr = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         const docName = `Объединённый документ ${dateStr} ${timeStr}`;
-        
+
         const response = await fetch(`${API_BASE}/merge/${state.currentMergeId}/finalize?name=${encodeURIComponent(docName)}`, {
-            method: 'POST'
+            method: 'POST',
+            headers: { ...getAuthHeader() }
         });
 
         if (!response.ok) {
@@ -1005,15 +1093,15 @@ async function finalizeMerge() {
         }
 
         const result = await response.json();
-        
+
         addInlineLog(progressId, `Документ "${result.document_name}" создан успешно!`, 'success');
-        
+
         // Store the new document ID for download
         state.lastMergedDocumentId = result.new_document_id;
-        
+
         // Show success with download option
         showMergeSuccess(result);
-        
+
         state.selectedMergeDocs = [];
         state.currentMergeId = null;
         renderMergeDocsList();
@@ -1045,7 +1133,7 @@ function showMergeSuccess(result) {
             </div>
         </div>
     `;
-    
+
     // Hide the finalize button since merge is complete
     document.getElementById('finalizeMergeBtn').style.display = 'none';
     document.querySelector('.merge-actions button[onclick="cancelMerge()"]').style.display = 'none';
@@ -1057,19 +1145,21 @@ async function downloadMergedDocument(docId, docName) {
 
 async function downloadDocument(docId, docName) {
     try {
-        const response = await fetch(`${API_BASE}/documents/${docId}/download`);
-        
+        const response = await fetch(`${API_BASE}/documents/${docId}/download`, {
+            headers: { ...getAuthHeader() }
+        });
+
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.detail || 'Ошибка загрузки документа');
         }
-        
+
         const blob = await response.blob();
-        
+
         // Get filename from Content-Disposition header if available
         const contentDisposition = response.headers.get('Content-Disposition');
         let filename = docName;
-        
+
         if (contentDisposition) {
             // Try to extract filename from UTF-8 encoded header
             const utf8Match = contentDisposition.match(/filename\*=UTF-8''(.+)/i);
@@ -1083,12 +1173,12 @@ async function downloadDocument(docId, docName) {
                 }
             }
         }
-        
+
         // Ensure proper extension
         if (!filename.endsWith('.docx') && !filename.endsWith('.txt')) {
             filename = `${filename}.docx`;
         }
-        
+
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -1097,7 +1187,7 @@ async function downloadDocument(docId, docName) {
         a.click();
         window.URL.revokeObjectURL(url);
         a.remove();
-        
+
         showToast('Документ скачан!', 'success');
     } catch (error) {
         showToast('Ошибка скачивания: ' + error.message, 'error');

@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  doc-compare:
+    build: .
+    container_name: doc_compare_platform
+    ports:
+      - "5060:5060"
+    restart: always
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Если приложение создает БД (Base.metadata.create_all), 
+      # лучше примонтировать папку для сохранения данных при перезапуске
+      - ./backend:/app/backend

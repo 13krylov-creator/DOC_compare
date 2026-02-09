@@ -7,9 +7,11 @@ import uuid
 
 from database import get_db
 from models.document import Document, DocumentVersion
+from models.user import User
 from models.comparison import DocumentComparison
 from services.diff_engine import DiffEngine
 from services.ai_service import ai_service
+from services.auth_service import get_current_user
 
 router = APIRouter()
 
@@ -47,12 +49,19 @@ async def compare_documents(
     mode: str = Query("line-by-line", enum=COMPARISON_MODES),
     show_full: bool = Query(False, description="Show full document with highlighted differences"),
     request_body: Optional[CompareRequest] = Body(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Compare two documents with optional AI enhancement for semantic mode"""
-    # Get documents
-    doc1 = db.query(Document).filter(Document.id == id1).first()
-    doc2 = db.query(Document).filter(Document.id == id2).first()
+    """Compare two documents with optional AI enhancement for semantic mode (auth required)"""
+    # Get documents (validate ownership)
+    doc1 = db.query(Document).filter(
+        Document.id == id1,
+        Document.uploaded_by == current_user.id
+    ).first()
+    doc2 = db.query(Document).filter(
+        Document.id == id2,
+        Document.uploaded_by == current_user.id
+    ).first()
     
     version1 = None
     version2 = None
@@ -65,9 +74,17 @@ async def compare_documents(
     else:
         version1 = db.query(DocumentVersion).filter(DocumentVersion.id == id1).first()
         if version1:
-            text1 = version1.content or ""
+            # Check ownership via parent document
+            parent_doc1 = db.query(Document).filter(
+                Document.id == version1.document_id,
+                Document.uploaded_by == current_user.id
+            ).first()
+            if parent_doc1:
+                text1 = version1.content or ""
+            else:
+                raise HTTPException(status_code=404, detail=f"Document/version {id1} not found or access denied")
         else:
-            raise HTTPException(status_code=404, detail=f"Document/version {id1} not found")
+            raise HTTPException(status_code=404, detail=f"Document/version {id1} not found or access denied")
     
     if doc2:
         version2 = db.query(DocumentVersion).filter(
@@ -77,9 +94,16 @@ async def compare_documents(
     else:
         version2 = db.query(DocumentVersion).filter(DocumentVersion.id == id2).first()
         if version2:
-            text2 = version2.content or ""
+            parent_doc2 = db.query(Document).filter(
+                Document.id == version2.document_id,
+                Document.uploaded_by == current_user.id
+            ).first()
+            if parent_doc2:
+                text2 = version2.content or ""
+            else:
+                raise HTTPException(status_code=404, detail=f"Document/version {id2} not found or access denied")
         else:
-            raise HTTPException(status_code=404, detail=f"Document/version {id2} not found")
+            raise HTTPException(status_code=404, detail=f"Document/version {id2} not found or access denied")
     
     # Perform diff comparison
     diff_engine = DiffEngine()

@@ -202,12 +202,12 @@ class AIService:
             "messages": [
                 {"role": "user", "content": prompt}
             ],
-            "max_tokens": 500,
+            "max_tokens": 2000,
             "temperature": 0.3
         }
         
         try:
-            async with httpx.AsyncClient(timeout=60) as client:
+            async with httpx.AsyncClient(timeout=120) as client:
                 response = await client.post(url, json=payload)
                 print(f"GPT response status: {response.status_code}")
                 if response.status_code == 200:
