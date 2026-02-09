@@ -13,7 +13,7 @@ from database import get_db
 from models.document import Document, DocumentVersion, DocumentStatus
 from models.user import User
 from services.document_processor import DocumentProcessor
-from services.auth_service import get_current_user, get_current_user_optional
+from services.auth_service import get_current_user
 from config import settings
 
 router = APIRouter()

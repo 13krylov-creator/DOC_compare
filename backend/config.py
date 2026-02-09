@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     KEYCLOAK_SERVER_URL: str = os.getenv("KEYCLOAK_SERVER_URL", "https://auth.nir.center")
     KEYCLOAK_REALM: str = os.getenv("KEYCLOAK_REALM", "platform")
     KEYCLOAK_CLIENT_ID: str = os.getenv("KEYCLOAK_CLIENT_ID", "oauth2-proxy")
-    KEYCLOAK_CLIENT_SECRET: str = os.getenv("KEYCLOAK_CLIENT_SECRET", "mZsGFiHJG59MH0rrOVPlgtdtBHH9zf3d")
+    KEYCLOAK_CLIENT_SECRET: str = os.getenv("KEYCLOAK_CLIENT_SECRET", "oauth2_proxy_secret_change_me")
     
     # ML Services
     ML_HOST_GPT: str = os.getenv("ML_HOST_GPT", "10.109.50.250:1212")
@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "./uploads")
     MAX_FILE_SIZE: int = 50 * 1024 * 1024  # 50 MB
     ALLOWED_EXTENSIONS: list = ["pdf", "docx", "txt"]
+    FILE_RETENTION_DAYS: int = int(os.getenv("FILE_RETENTION_DAYS", "7"))  # Files auto-delete after 7 days
     
     class Config:
         env_file = ".env"

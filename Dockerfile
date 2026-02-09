@@ -16,8 +16,8 @@ COPY . .
 # Переходим в папку с бэкендом для запуска
 WORKDIR /app/backend
 
-# Порт 5060 уже прописан в вашем main.py
-EXPOSE 5060
+# Порт 5055 уже прописан в вашем main.py
+EXPOSE 5055
 
 # Запуск через python main.py (как в вашем .bat файле)
 CMD ["python", "main.py"]

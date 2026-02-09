@@ -9,7 +9,7 @@
   "enabled": true,
   "alwaysDisplayInConsole": false,
   "clientAuthenticatorType": "client-secret",
-  "secret": "mZsGFiHJG59MH0rrOVPlgtdtBHH9zf3d",
+  "secret": "oauth2_proxy_secret_change_me",
   "redirectUris": [
     "https://auth.nir.center/oauth2/callback",
     "https://anonymize.nir.center/oauth2/callback",

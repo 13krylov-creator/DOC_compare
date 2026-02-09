@@ -1,25 +1,63 @@
 # СравнениеДок Платформа - Бэкенд
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import uvicorn
 import os
+import asyncio
+import logging
 
 from config import settings
 from database import engine, Base
 from routers import auth, documents, compare, merge, extract
+from services.cleanup_service import cleanup_old_files
+
+logger = logging.getLogger(__name__)
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
+
+# Scheduler task for cleanup
+async def cleanup_scheduler():
+    """Запускает очистку старых файлов каждый час"""
+    while True:
+        try:
+            logger.info("Running scheduled file cleanup...")
+            deleted = cleanup_old_files()
+            if deleted > 0:
+                logger.info(f"Cleanup scheduler: deleted {deleted} old files")
+        except Exception as e:
+            logger.error(f"Cleanup scheduler error: {e}")
+        # Запуск каждый час
+        await asyncio.sleep(3600)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup/shutdown events"""
+    # Startup: запуск планировщика очистки
+    logger.info(f"Starting cleanup scheduler (retention: {settings.FILE_RETENTION_DAYS} days)")
+    # Запускаем очистку при старте
+    cleanup_old_files()
+    # Создаём фоновую задачу
+    cleanup_task = asyncio.create_task(cleanup_scheduler())
+    yield
+    # Shutdown: останавливаем планировщик
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        logger.info("Cleanup scheduler stopped")
 
 app = FastAPI(
     title="СравнениеДок Платформа",
     description="Платформа сравнения и слияния документов с AI. Поддерживает 2 режима сравнения (построчно и семантический), многостороннее слияние документов с разрешением конфликтов.",
     version="2.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # CORS middleware
@@ -87,7 +125,6 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=5060,
+        port=5055,
         reload=True
     )
-

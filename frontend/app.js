@@ -8,60 +8,39 @@ let state = {
     selectedMergeDocs: [],
     currentMergeId: null,
     currentView: 'compare',
-    lastMergedDocumentId: null
+    lastMergedDocumentId: null,
+    currentUser: null
 };
 
-// Keycloak instance
-let keycloak = null;
-
-// Initialize Keycloak authentication
-async function initKeycloak() {
-    keycloak = new Keycloak({
-        url: 'https://auth.nir.center',
-        realm: 'platform',
-        clientId: 'oauth2-proxy'
-    });
-
+// Load current user from oauth2-proxy (via /api/v1/auth/me)
+async function loadCurrentUser() {
     try {
-        const authenticated = await keycloak.init({
-            onLoad: 'login-required',
-            checkLoginIframe: false,
-            pkceMethod: 'S256'
-        });
-
-        if (authenticated) {
-            console.log('User authenticated via Keycloak');
+        const response = await fetch(`${API_BASE}/auth/me`);
+        if (response.ok) {
+            state.currentUser = await response.json();
             updateUserInfo();
-            loadDocuments();
-            setupEventListeners();
-            showView('compare');
-
-            // Auto-refresh token
-            setInterval(() => {
-                keycloak.updateToken(60).catch(() => {
-                    console.log('Token refresh failed, logging out');
-                    keycloak.logout();
-                });
-            }, 30000);
+            console.log('User loaded:', state.currentUser.email);
         } else {
-            console.log('Not authenticated');
-            keycloak.login();
+            console.log('Not authenticated or auth headers missing');
+            state.currentUser = null;
+            updateUserInfo();
         }
     } catch (error) {
-        console.error('Keycloak init error:', error);
-        showToast('Ошибка авторизации. Попробуйте обновить страницу.', 'error');
+        console.error('Error loading user:', error);
+        state.currentUser = null;
+        updateUserInfo();
     }
 }
 
-// Update user info in navbar
+// Update user info display in navbar
 function updateUserInfo() {
     const userInfoEl = document.getElementById('userInfo');
     const userNameEl = document.getElementById('userName');
 
-    if (keycloak && keycloak.authenticated && keycloak.tokenParsed) {
-        const name = keycloak.tokenParsed.name ||
-            keycloak.tokenParsed.preferred_username ||
-            keycloak.tokenParsed.email ||
+    if (state.currentUser) {
+        const name = state.currentUser.full_name ||
+            state.currentUser.username ||
+            state.currentUser.email ||
             'Пользователь';
         userNameEl.textContent = name;
         userInfoEl.classList.remove('hidden');
@@ -70,24 +49,17 @@ function updateUserInfo() {
     }
 }
 
-// Logout function
+// Logout - redirect to oauth2-proxy logout endpoint
 function logout() {
-    if (keycloak) {
-        keycloak.logout({ redirectUri: window.location.origin });
-    }
+    window.location.href = '/oauth2/sign_out?rd=' + encodeURIComponent(window.location.origin);
 }
 
-// Get authorization header for API calls
-function getAuthHeader() {
-    if (keycloak && keycloak.authenticated && keycloak.token) {
-        return { 'Authorization': 'Bearer ' + keycloak.token };
-    }
-    return {};
-}
-
-// Инициализация
+// Инициализация - oauth2-proxy handles auth via cookies, no Bearer tokens needed
 document.addEventListener('DOMContentLoaded', () => {
-    initKeycloak();
+    loadCurrentUser();
+    loadDocuments();
+    setupEventListeners();
+    showView('compare');
 });
 
 function setupEventListeners() {
@@ -254,9 +226,7 @@ function completeInlineProgress(containerId, message) {
 // ===================== ДОКУМЕНТЫ =====================
 async function loadDocuments() {
     try {
-        const response = await fetch(`${API_BASE}/documents/`, {
-            headers: { ...getAuthHeader() }
-        });
+        const response = await fetch(`${API_BASE}/documents/`);
         if (response.ok) {
             const data = await response.json();
             state.documents = data.documents || [];
@@ -337,8 +307,7 @@ async function uploadFiles(files) {
 
             const response = await fetch(`${API_BASE}/documents/upload`, {
                 method: 'POST',
-                body: formData,
-                headers: { ...getAuthHeader() }
+                body: formData
             });
 
             if (!response.ok) {
@@ -389,8 +358,7 @@ async function deleteDocument(id) {
     if (!confirm('Удалить этот документ?')) return;
     try {
         await fetch(`${API_BASE}/documents/${id}`, {
-            method: 'DELETE',
-            headers: { ...getAuthHeader() }
+            method: 'DELETE'
         });
         showToast('Документ удалён', 'success');
         loadDocuments();
@@ -464,8 +432,7 @@ async function runComparison() {
         const requestOptions = {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                ...getAuthHeader()
+                'Content-Type': 'application/json'
             }
         };
 

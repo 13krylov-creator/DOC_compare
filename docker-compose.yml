@@ -5,11 +5,19 @@ services:
     build: .
     container_name: doc_compare_platform
     ports:
-      - "5060:5060"
+      - "5055:5055"
     restart: always
     environment:
       - PYTHONUNBUFFERED=1
+      - OIDC_ISSUER=https://auth.nir.center/realms/platform
+      - OIDC_CLIENT_ID=oauth2-proxy
+      - OIDC_CLIENT_SECRET=oauth2_proxy_secret_change_me
+      - PREFERRED_URL_SCHEME=https
+      - REQUESTS_CA_BUNDLE=/etc/ssl/certs/nir-platform.crt
+    extra_hosts:
+      - "auth.nir.center:10.109.50.250"
     volumes:
       # Если приложение создает БД (Base.metadata.create_all), 
       # лучше примонтировать папку для сохранения данных при перезапуске
+      - /etc/nginx/ssl/nir-platform.crt:/etc/ssl/certs/nir-platform.crt:ro
       - ./backend:/app/backend

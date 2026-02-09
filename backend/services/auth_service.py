@@ -1,147 +1,81 @@
-from datetime import datetime, timedelta
+"""
+Auth service for oauth2-proxy integration.
+Gets user info from X-Auth-Request-* headers set by oauth2-proxy.
+"""
+from datetime import datetime
 from typing import Optional
-from jose import JWTError, jwt
-from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 import uuid
 
-from config import settings
 from database import get_db
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify password against hash"""
-    return pwd_context.verify(plain_password, hashed_password)
-
-def get_password_hash(password: str) -> str:
-    """Hash a password"""
-    return pwd_context.hash(password)
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Create JWT access token"""
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-    return encoded_jwt
-
-def decode_token(token: str) -> Optional[dict]:
-    """Decode and validate JWT token"""
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        return payload
-    except JWTError:
-        return None
-
-
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+async def get_current_user_from_proxy(
+    request: Request,
     db: Session = Depends(get_db)
 ):
-    """Get current user from token (supports both local JWT and Keycloak tokens)"""
-    from models.user import User, Tenant
-    from services.keycloak_service import get_keycloak_service
+    """
+    Get current user from oauth2-proxy headers.
+    oauth2-proxy sets these headers after successful authentication:
+    - X-Auth-Request-Email: user's email
+    - X-Auth-Request-User: username or sub
+    - X-Auth-Request-Preferred-Username: preferred username
+    - X-Auth-Request-Groups: user groups (comma-separated)
+    """
+    from models.user import User
     
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    # Get user info from oauth2-proxy headers (nginx forwards these)
+    email = request.headers.get("X-Auth-Request-Email")
+    username = request.headers.get("X-Auth-Request-Preferred-Username") or request.headers.get("X-Auth-Request-User")
+    groups = request.headers.get("X-Auth-Request-Groups", "")
     
-    if not token:
-        raise credentials_exception
+    # Debug: log received headers
+    print(f"Auth headers: email={email}, username={username}, groups={groups}")
     
-    # Check if this is a Keycloak token (RS256) or local JWT (HS256)
-    keycloak_service = get_keycloak_service()
+    if not email and not username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated. Missing X-Auth-Request-* headers from proxy.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     
-    if keycloak_service.is_keycloak_token(token):
-        # Validate Keycloak token
-        payload = await keycloak_service.validate_token(token)
-        if payload is None:
-            raise credentials_exception
-        
-        # Extract user info from Keycloak claims
-        user_info = keycloak_service.extract_user_info(payload)
-        keycloak_user_id = user_info.get("sub")
-        email = user_info.get("email")
-        username = user_info.get("preferred_username") or email
-        full_name = user_info.get("name")
-        
-        if not keycloak_user_id:
-            raise credentials_exception
-        
-        # Find or create local user
-        # We use keycloak_user_id (sub claim) as our user id
-        user = db.query(User).filter(User.id == keycloak_user_id).first()
-        
-        if not user:
-            # Create new user from Keycloak claims
-            user = User(
-                id=keycloak_user_id,
-                email=email or f"{username}@keycloak",
-                username=username or keycloak_user_id[:20],
-                hashed_password="",  # No local password for Keycloak users
-                full_name=full_name,
-                role="user",
-                is_active="true",
-                created_at=datetime.utcnow()
-            )
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-        else:
-            # Update user info from Keycloak if changed
-            updated = False
-            if email and user.email != email:
-                user.email = email
-                updated = True
-            if full_name and user.full_name != full_name:
-                user.full_name = full_name
-                updated = True
-            if updated:
-                user.updated_at = datetime.utcnow()
-                db.commit()
-        
-        return user
-    else:
-        # Local JWT token
-        payload = decode_token(token)
-        if payload is None:
-            raise credentials_exception
-        
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-        
-        user = db.query(User).filter(User.id == user_id).first()
-        if user is None:
-            raise credentials_exception
-        
-        return user
+    # Use email as primary identifier, fallback to username
+    user_identifier = email or username
+    
+    # Find user by email first, then by username
+    user = None
+    if email:
+        user = db.query(User).filter(User.email == email).first()
+    if not user and username:
+        user = db.query(User).filter(User.username == username).first()
+    
+    if not user:
+        # Auto-create user from oauth2-proxy info
+        user = User(
+            id=str(uuid.uuid4()),
+            email=email or f"{username}@oauth2-proxy",
+            username=username or email.split("@")[0] if email else str(uuid.uuid4())[:8],
+            hashed_password="",  # No local password for SSO users
+            full_name=username,
+            role="user",
+            is_active="true",
+            created_at=datetime.utcnow()
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        print(f"Created new user from oauth2-proxy: {user.email}")
+    
+    return user
 
 
-async def get_current_active_user(current_user = Depends(get_current_user)):
+async def get_current_active_user(current_user = Depends(get_current_user_from_proxy)):
     """Get current active user"""
     if current_user.is_active != "true":
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
 
 
-async def get_current_user_optional(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
-):
-    """Get current user if authenticated, None otherwise (for optional auth endpoints)"""
-    if not token:
-        return None
-    try:
-        return await get_current_user(token, db)
-    except HTTPException:
-        return None
+# Alias for compatibility with existing code
+get_current_user = get_current_user_from_proxy
