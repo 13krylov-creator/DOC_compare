@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     
     # ML Services
     ML_HOST_GPT: str = os.getenv("ML_HOST_GPT", "10.109.50.250:1212")
-    ML_MODEL_GPT: str = os.getenv("ML_MODEL_GPT", "openai/gpt-oss-20b")
+    ML_MODEL_GPT: str = os.getenv("ML_MODEL_GPT", "Qwen3-VL")
     ML_HOST_VISION: str = os.getenv("ML_HOST_VISION", "10.109.50.250:8880")
     ML_MODEL_VISION: str = os.getenv("ML_MODEL_VISION", "/model")
     ML_TIMEOUT: int = int(os.getenv("ML_TIMEOUT", "120"))

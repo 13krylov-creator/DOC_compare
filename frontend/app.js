@@ -840,8 +840,7 @@ async function startMerge() {
         const response = await fetch(`${API_BASE}/merge/`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                ...getAuthHeader()
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({
                 document_ids: state.selectedMergeDocs,
@@ -1059,8 +1058,7 @@ async function finalizeMerge() {
             const resolveResponse = await fetch(`${API_BASE}/merge/${state.currentMergeId}/resolve-bulk`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    ...getAuthHeader()
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ resolutions })
             });
@@ -1081,8 +1079,7 @@ async function finalizeMerge() {
         const docName = `Объединённый документ ${dateStr} ${timeStr}`;
 
         const response = await fetch(`${API_BASE}/merge/${state.currentMergeId}/finalize?name=${encodeURIComponent(docName)}`, {
-            method: 'POST',
-            headers: { ...getAuthHeader() }
+            method: 'POST'
         });
 
         if (!response.ok) {
@@ -1143,9 +1140,7 @@ async function downloadMergedDocument(docId, docName) {
 
 async function downloadDocument(docId, docName) {
     try {
-        const response = await fetch(`${API_BASE}/documents/${docId}/download`, {
-            headers: { ...getAuthHeader() }
-        });
+        const response = await fetch(`${API_BASE}/documents/${docId}/download`);
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
