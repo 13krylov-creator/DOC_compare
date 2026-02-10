@@ -14,19 +14,22 @@ let state = {
 
 // Load current user from oauth2-proxy (via /api/v1/auth/me)
 async function loadCurrentUser() {
+    console.log('[AUTH] Loading current user from /api/v1/auth/me...');
     try {
         const response = await fetch(`${API_BASE}/auth/me`);
+        console.log('[AUTH] /auth/me response status:', response.status);
         if (response.ok) {
             state.currentUser = await response.json();
+            console.log('[AUTH] User loaded successfully:', JSON.stringify(state.currentUser));
             updateUserInfo();
-            console.log('User loaded:', state.currentUser.email);
         } else {
-            console.log('Not authenticated or auth headers missing');
+            const errorText = await response.text();
+            console.warn('[AUTH] Failed to load user. Status:', response.status, 'Body:', errorText);
             state.currentUser = null;
             updateUserInfo();
         }
     } catch (error) {
-        console.error('Error loading user:', error);
+        console.error('[AUTH] Error loading user:', error);
         state.currentUser = null;
         updateUserInfo();
     }
@@ -37,20 +40,25 @@ function updateUserInfo() {
     const userInfoEl = document.getElementById('userInfo');
     const userNameEl = document.getElementById('userName');
 
+    console.log('[AUTH] updateUserInfo called, currentUser:', state.currentUser ? state.currentUser.email : 'null');
+
     if (state.currentUser) {
         const name = state.currentUser.full_name ||
             state.currentUser.username ||
             state.currentUser.email ||
             'Пользователь';
+        console.log('[AUTH] Displaying user name:', name);
         userNameEl.textContent = name;
         userInfoEl.classList.remove('hidden');
     } else {
+        console.log('[AUTH] No user, hiding user info');
         userInfoEl.classList.add('hidden');
     }
 }
 
 // Logout - redirect to oauth2-proxy logout endpoint
 function logout() {
+    console.log('[AUTH] Logging out via /oauth2/sign_out');
     window.location.href = '/oauth2/sign_out?rd=' + encodeURIComponent(window.location.origin);
 }
 
@@ -311,8 +319,22 @@ async function uploadFiles(files) {
             });
 
             if (!response.ok) {
-                const err = await response.json();
-                addInlineLog(progressId, `Ошибка сервера: ${err.detail || response.statusText}`, 'error');
+                let errorMsg = `HTTP ${response.status}`;
+                if (response.status === 413) {
+                    errorMsg = 'Файл слишком большой для сервера (nginx client_max_body_size). Увеличьте лимит в nginx.';
+                } else if (response.status === 401) {
+                    errorMsg = 'Не авторизован. Перезайдите в систему.';
+                } else {
+                    try {
+                        const err = await response.json();
+                        errorMsg = err.detail || response.statusText;
+                    } catch (e) {
+                        const text = await response.text().catch(() => '');
+                        errorMsg = text || response.statusText;
+                    }
+                }
+                addInlineLog(progressId, `Ошибка загрузки: ${errorMsg}`, 'error');
+                console.error(`[UPLOAD] Error uploading ${file.name}: status=${response.status}`, errorMsg);
                 continue;
             }
 

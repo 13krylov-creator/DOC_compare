@@ -10,6 +10,12 @@ import os
 import asyncio
 import logging
 
+# Configure logging - ensure auth_service messages are visible
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(name)s] %(levelname)s: %(message)s'
+)
+
 from config import settings
 from database import engine, Base
 from routers import auth, documents, compare, merge, extract
