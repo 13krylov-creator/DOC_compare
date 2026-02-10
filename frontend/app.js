@@ -42,9 +42,10 @@ function updateUserInfo() {
     console.log('[AUTH] updateUserInfo called, currentUser:', state.currentUser ? state.currentUser.email : 'null');
 
     if (state.currentUser) {
-        const name = state.currentUser.full_name ||
+        // Приоритет: email > full_name > username
+        const name = state.currentUser.email ||
+            state.currentUser.full_name ||
             state.currentUser.username ||
-            state.currentUser.email ||
             'Пользователь';
         console.log('[AUTH] Displaying user name:', name);
         userNameEl.textContent = name;
@@ -54,10 +55,13 @@ function updateUserInfo() {
     }
 }
 
-// Logout - redirect to oauth2-proxy logout endpoint
+// Logout - redirect to Keycloak logout endpoint
 function logout() {
-    console.log('[AUTH] Logging out via /oauth2/sign_out');
-    window.location.href = '/oauth2/sign_out?rd=' + encodeURIComponent(window.location.origin);
+    console.log('[AUTH] Logging out...');
+    // Пробуем через oauth2-proxy, если не работает — напрямую через Keycloak
+    const redirectUri = encodeURIComponent(window.location.origin);
+    // oauth2-proxy sign_out + redirect to Keycloak logout
+    window.location.href = '/oauth2/sign_out?rd=https://auth.nir.center/realms/platform/protocol/openid-connect/logout?post_logout_redirect_uri=' + redirectUri + '&client_id=oauth2-proxy';
 }
 
 // Инициализация - oauth2-proxy handles auth via cookies, no Bearer tokens needed
@@ -332,6 +336,7 @@ async function uploadFiles(files) {
                     }
                 }
                 addInlineLog(progressId, `Ошибка загрузки: ${errorMsg}`, 'error');
+                showToast(`❌ Ошибка загрузки: ${errorMsg}`, 'error');
                 console.error(`[UPLOAD] Error uploading ${file.name}: status=${response.status}`, errorMsg);
                 continue;
             }
@@ -774,6 +779,9 @@ function renderMergeDocsList() {
             <input type="checkbox" value="${doc.id}" ${state.selectedMergeDocs.includes(doc.id) ? 'checked' : ''} onchange="toggleMergeDoc('${doc.id}')">
             <span class="merge-doc-icon">${getFileIcon(doc.file_type)}</span>
             <span class="merge-doc-name">${escapeHtml(doc.name)}</span>
+            <span class="doc-size-compact">${formatSize(doc.file_size)}</span>
+            <button class="doc-download-btn" onclick="event.preventDefault(); event.stopPropagation(); downloadDocument('${doc.id}', '${escapeHtml(doc.name).replace(/'/g, "\\'")}');" title="Скачать">📥</button>
+            <button class="doc-delete-btn" onclick="event.preventDefault(); event.stopPropagation(); deleteDocument('${doc.id}')" title="Удалить">🗑</button>
         </label>
     `).join('') || '<div class="empty-docs">Нет загруженных файлов</div>';
 }

@@ -21,3 +21,4 @@ services:
       # лучше примонтировать папку для сохранения данных при перезапуске
       - /etc/nginx/ssl/nir-platform.crt:/etc/ssl/certs/nir-platform.crt:ro
       - ./backend:/app/backend
+      - ./frontend:/app/frontend
