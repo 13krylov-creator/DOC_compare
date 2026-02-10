@@ -58,10 +58,13 @@ function updateUserInfo() {
 // Logout - redirect to Keycloak logout endpoint
 function logout() {
     console.log('[AUTH] Logging out...');
-    // Пробуем через oauth2-proxy, если не работает — напрямую через Keycloak
     const redirectUri = encodeURIComponent(window.location.origin);
-    // oauth2-proxy sign_out + redirect to Keycloak logout
-    window.location.href = '/oauth2/sign_out?rd=https://auth.nir.center/realms/platform/protocol/openid-connect/logout?post_logout_redirect_uri=' + redirectUri + '&client_id=oauth2-proxy';
+    // Формируем Keycloak logout URL с client_id и redirect
+    const keycloakLogout = 'https://auth.nir.center/realms/platform/protocol/openid-connect/logout'
+        + '?client_id=oauth2-proxy'
+        + '&post_logout_redirect_uri=' + redirectUri;
+    // Передаём через oauth2-proxy sign_out, кодируя весь URL
+    window.location.href = '/oauth2/sign_out?rd=' + encodeURIComponent(keycloakLogout);
 }
 
 // Инициализация - oauth2-proxy handles auth via cookies, no Bearer tokens needed
