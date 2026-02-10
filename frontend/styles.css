@@ -1808,7 +1808,11 @@ mark.diff-add {
     font-weight: 500;
     color: var(--text-dark);
     flex: 1;
+    min-width: 0;
     word-break: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
+    overflow: visible;
 }
 
 /* Merge Strategy Section */
@@ -2370,10 +2374,13 @@ mark.diff-add {
 
 .merge-doc-name {
     flex: 1;
+    min-width: 0;
     font-size: 0.9rem;
     color: var(--text-dark);
     word-break: break-word;
     overflow-wrap: break-word;
+    white-space: normal;
+    overflow: visible;
 }
 
 .merge-strategy label {

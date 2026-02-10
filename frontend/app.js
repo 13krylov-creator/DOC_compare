@@ -37,7 +37,6 @@ async function loadCurrentUser() {
 
 // Update user info display in navbar
 function updateUserInfo() {
-    const userInfoEl = document.getElementById('userInfo');
     const userNameEl = document.getElementById('userName');
 
     console.log('[AUTH] updateUserInfo called, currentUser:', state.currentUser ? state.currentUser.email : 'null');
@@ -49,10 +48,9 @@ function updateUserInfo() {
             'Пользователь';
         console.log('[AUTH] Displaying user name:', name);
         userNameEl.textContent = name;
-        userInfoEl.classList.remove('hidden');
     } else {
-        console.log('[AUTH] No user, hiding user info');
-        userInfoEl.classList.add('hidden');
+        console.log('[AUTH] No user data, showing fallback');
+        userNameEl.textContent = 'Пользователь';
     }
 }
 
