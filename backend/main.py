@@ -18,7 +18,7 @@ logging.basicConfig(
 
 from config import settings
 from database import engine, Base
-from routers import auth, documents, compare, merge, extract
+from routers import auth, documents, compare, merge, extract, anonymizer, docanalysis
 from services.cleanup_service import cleanup_old_files
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,9 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting cleanup scheduler (retention: {settings.FILE_RETENTION_DAYS} days)")
     # Запускаем очистку при старте
     cleanup_old_files()
+    # Очистка файлов anonymizer
+    from anonymizer_utils.file_utils import cleanup_old_files as anon_cleanup
+    anon_cleanup()
     # Создаём фоновую задачу
     cleanup_task = asyncio.create_task(cleanup_scheduler())
     yield
@@ -58,7 +61,7 @@ async def lifespan(app: FastAPI):
         logger.info("Cleanup scheduler stopped")
 
 app = FastAPI(
-    title="СравнениеДок Платформа",
+    title="Документы Про",
     description="Платформа сравнения и слияния документов с AI. Поддерживает 2 режима сравнения (построчно и семантический), многостороннее слияние документов с разрешением конфликтов.",
     version="2.0",
     docs_url="/docs",
@@ -81,6 +84,8 @@ app.include_router(documents.router, prefix="/api/v1/documents", tags=["Доку
 app.include_router(compare.router, prefix="/api/v1/compare", tags=["Сравнение"])
 app.include_router(merge.router, prefix="/api/v1/merge", tags=["Слияние"])
 app.include_router(extract.router, prefix="/api/v1/extract", tags=["Извлечение"])
+app.include_router(anonymizer.router, prefix="/api/v1/anonymizer", tags=["Обезличивание"])
+app.include_router(docanalysis.router, prefix="/api/v1/docanalysis", tags=["Анализ документа"])
 
 # Frontend path
 frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend"))

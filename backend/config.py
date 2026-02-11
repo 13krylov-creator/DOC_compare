@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     ALLOWED_EXTENSIONS: list = ["pdf", "docx", "txt"]
     FILE_RETENTION_DAYS: int = int(os.getenv("FILE_RETENTION_DAYS", "7"))  # Files auto-delete after 7 days
     
+    # Anonymizer settings
+    ANONYMIZER_UPLOAD_DIR: str = os.getenv("ANONYMIZER_UPLOAD_DIR", "./anonymizer_uploads")
+    ANONYMIZER_RETENTION_HOURS: int = int(os.getenv("ANONYMIZER_RETENTION_HOURS", "24"))
+    
     class Config:
         env_file = ".env"
 
@@ -46,6 +50,7 @@ settings = Settings()
 
 # Create upload directory if not exists
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+os.makedirs(settings.ANONYMIZER_UPLOAD_DIR, exist_ok=True)
 
 # ML Configuration (as specified in requirements)
 ML_CONFIG = {
@@ -58,4 +63,49 @@ ML_CONFIG = {
         "model": settings.ML_MODEL_VISION,
     },
     "timeout": settings.ML_TIMEOUT,
+}
+
+# ===================== Anonymizer Configuration =====================
+
+from pathlib import Path
+
+ANONYMIZER_UPLOAD_DIR = Path(settings.ANONYMIZER_UPLOAD_DIR)
+ANONYMIZER_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+ANONYMIZER_SUPPORTED_FORMATS = {
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xls": "application/vnd.ms-excel",
+    ".pdf": "application/pdf",
+}
+
+ANONYMIZATION_OPTIONS = [
+    {"id": "prices", "label": "Цены и суммы", "description": "Замена денежных значений"},
+    {"id": "companies", "label": "Названия компаний", "description": "Замена названий организаций"},
+    {"id": "logos", "label": "Логотипы", "description": "Удаление изображений логотипов"},
+    {"id": "personal", "label": "ФИО и контакты", "description": "Замена персональных данных"},
+    {"id": "addresses", "label": "Адреса и геолокация", "description": "Удаление физических адресов"},
+    {"id": "requisites", "label": "Реквизиты", "description": "Удаление ИНН, ОГРН, счетов"},
+    {"id": "dates", "label": "Даты и сроки", "description": "Замена абсолютных дат"},
+    {"id": "technical", "label": "Технические детали", "description": "Замена продуктов и версий"},
+    {"id": "metadata", "label": "Метаданные файлов", "description": "Очистка служебной информации"},
+    {"id": "watermarks", "label": "Водяные знаки и подписи", "description": "Удаление визуальных идентификаторов"},
+]
+
+DEFAULT_PROFILES = {
+    "full": {
+        "name": "Полное обезличивание",
+        "description": "Для конкурентов - все галочки включены",
+        "options": ["prices", "companies", "logos", "personal", "addresses", "requisites", "dates", "technical", "metadata", "watermarks"],
+    },
+    "media": {
+        "name": "Для СМИ",
+        "description": "Оставить даты, убрать компании и цены",
+        "options": ["prices", "companies", "logos", "personal", "addresses", "requisites", "technical", "metadata", "watermarks"],
+    },
+    "partners": {
+        "name": "Для партнеров",
+        "description": "Убрать только цены и реквизиты",
+        "options": ["prices", "requisites", "metadata"],
+    },
 }

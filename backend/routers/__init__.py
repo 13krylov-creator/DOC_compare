@@ -1,1 +1,1 @@
-from routers import auth, documents, compare, merge, extract, risk
+from routers import auth, documents, compare, merge, extract, risk, anonymizer
