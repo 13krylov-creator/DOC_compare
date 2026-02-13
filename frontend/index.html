@@ -9,696 +9,804 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=2">
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <script>
         mermaid.initialize({
             startOnLoad: false,
             theme: 'default',
             securityLevel: 'loose', // Allow inline styles
-            flowchart: { useMaxWidth: false, htmlLabels: true }
+            flowchart: { useMaxWidth: false, htmlLabels: true },
+            suppressErrorRendering: true
         });
     </script>
 </head>
 
 <body>
-    <!-- Navigation -->
-    <nav class="navbar">
-        <a href="/" class="logo">
-            <span class="logo-icon">📄</span>
-            <span class="logo-text">Документы</span>
-            <span class="logo-badge">Про</span>
-        </a>
-        <div class="nav-menu">
-            <a href="#compare" class="nav-link active" data-view="compare">Сравнение</a>
-            <a href="#merge" class="nav-link" data-view="merge">Слияние</a>
-            <a href="#anonymize" class="nav-link" data-view="anonymize">Обезличивание</a>
-            <a href="#docanalysis" class="nav-link" data-view="docanalysis">Анализ</a>
-        </div>
-        <div class="nav-right">
-            <div class="anon-ml-status" style="margin-right: 20px;">
-                <span class="anon-status-dot" id="gptStatusAnon" title="GPT">GPT</span>
-                <span class="anon-status-dot" id="visionStatusAnon" title="Vision">Vision</span>
-            </div>
-            <div class="user-info" id="userInfo">
-                <span class="user-name" id="userName">Загрузка...</span>
-                <button class="btn btn-outline btn-sm" onclick="logout()">Выход</button>
-            </div>
-        </div>
-    </nav>
-
-    <!-- Compare Section -->
-    <section class="section" id="compare">
-        <div class="section-header">
-            <h2 class="section-title">Сравнение документов</h2>
-        </div>
-
-        <!-- Upload Zone -->
-        <div class="upload-zone" id="uploadZone">
-            <div class="upload-icon">📁</div>
-            <h3>Перетащите файлы сюда</h3>
-            <p>или нажмите для выбора</p>
-            <span class="upload-formats">PDF, DOCX, TXT • до 50 МБ</span>
-            <span class="upload-retention">⏱️ Файлы хранятся 7 дней</span>
-            <input type="file" id="fileInput" multiple accept=".pdf,.docx,.txt" hidden>
-            <button class="btn btn-outline" onclick="document.getElementById('fileInput').click()">Выбрать
-                файлы</button>
-        </div>
-
-        <!-- Documents List -->
-        <div class="docs-list-compact" id="docsListCompact">
-            <div class="docs-header">
-                <span>Загруженные файлы</span>
-                <span class="doc-count" id="docCount">0 файлов</span>
-            </div>
-            <div class="docs-items" id="docsItems"></div>
-        </div>
-
-        <div class="compare-panel">
-            <div class="compare-selectors">
-                <div class="selector-box">
-                    <label>Документ 1 (Оригинал)</label>
-                    <select id="doc1Select" class="select-input">
-                        <option value="">Выберите документ</option>
-                    </select>
-                </div>
-                <div class="vs-divider">⇋</div>
-                <div class="selector-box">
-                    <label>Документ 2 (Изменённый)</label>
-                    <select id="doc2Select" class="select-input">
-                        <option value="">Выберите документ</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="modes-section">
-                <label>Режим сравнения</label>
-                <div class="modes-grid modes-grid-2">
-                    <button class="mode-btn active" data-mode="line-by-line">
-                        <span class="mode-icon">📝</span>
-                        <span class="mode-name">Построчно</span>
-                        <span class="mode-desc">Классическое сравнение</span>
-                    </button>
-                    <button class="mode-btn" data-mode="semantic">
-                        <span class="mode-icon">🧠</span>
-                        <span class="mode-name">Семантика + AI</span>
-                        <span class="mode-desc">Анализ смысла</span>
-                    </button>
-                </div>
-            </div>
-
-            <div class="ai-prompt-section hidden" id="aiPromptSection">
-                <label for="customPrompt">Дополнительный запрос к AI (опционально)</label>
-                <textarea id="customPrompt" class="ai-prompt-input"
-                    placeholder="Например: 'Сосредоточься на финансовых изменениях' или 'Оцени юридические риски'"
-                    rows="2"></textarea>
-            </div>
-
-            <div class="compare-options">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="showFullDocument">
-                    <span class="checkmark"></span>
-                    Показать полный документ с выделением изменений
-                </label>
-            </div>
-
-            <button class="btn btn-primary btn-large" id="compareBtn" onclick="runComparison()">
-                Сравнить документы
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <a href="/" class="sidebar-logo">
+                <svg class="sidebar-logo-icon" width="28" height="28" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                    <polyline points="10 9 9 9 8 9" />
+                </svg>
+                <span class="sidebar-logo-text">Документы</span>
+                <span class="sidebar-logo-badge">Про</span>
+            </a>
+            <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="Свернуть панель">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+                    stroke-linecap="round">
+                    <path d="M10 3L5 8L10 13" />
+                </svg>
             </button>
-
-            <!-- Inline Progress & Logs for Compare -->
-            <div class="inline-progress hidden" id="compareProgress">
-                <div class="progress-header-inline">
-                    <span class="progress-title-inline">Обработка...</span>
-                    <span class="progress-percent-inline">0%</span>
-                </div>
-                <div class="progress-bar-inline">
-                    <div class="progress-fill-inline"></div>
-                </div>
-                <div class="log-section">
-                    <div class="log-section-header" onclick="toggleLogSection('compareProgress')">
-                        <span class="log-section-title">
-                            📋 Журнал операций
-                            <span class="log-count">0 записей</span>
-                        </span>
-                        <span class="log-toggle-icon">▼</span>
-                    </div>
-                    <div class="inline-log"></div>
-                </div>
-            </div>
         </div>
 
-        <!-- Results Panel -->
-        <div class="results-panel hidden" id="resultsPanel">
-            <div class="results-header">
-                <h3>Результаты сравнения</h3>
-                <div class="results-stats">
-                    <div class="stat"><span class="stat-value" id="totalChanges">0</span><span
-                            class="stat-label">Изменений</span></div>
-                    <div class="stat critical"><span class="stat-value" id="criticalChanges">0</span><span
-                            class="stat-label">🔴 Критичных</span></div>
-                    <div class="stat major"><span class="stat-value" id="majorChanges">0</span><span
-                            class="stat-label">🟡 Важных</span></div>
-                    <div class="stat minor"><span class="stat-value" id="minorChanges">0</span><span
-                            class="stat-label">🟢 Мелких</span></div>
-                    <div class="stat"><span class="stat-value" id="similarity">0%</span><span
-                            class="stat-label">Схожесть</span></div>
-                </div>
-            </div>
+        <nav class="sidebar-nav" id="sidebarNav">
+            <a class="sidebar-item active" data-view="compare" href="#compare">
+                <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="3" width="8" height="13" rx="1" />
+                    <rect x="14" y="8" width="8" height="13" rx="1" />
+                    <path d="M10 9h4" />
+                </svg>
+                <span class="sidebar-label">Сравнение</span>
+            </a>
+            <a class="sidebar-item" data-view="merge" href="#merge">
+                <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 4l-6 6-6-6" />
+                    <path d="M12 10v10" />
+                    <path d="M5 20h14" />
+                </svg>
+                <span class="sidebar-label">Слияние</span>
+            </a>
 
-            <div class="mode-info hidden" id="modeInfo"></div>
+            <div class="sidebar-divider"></div>
 
-            <div class="ai-summary-section hidden" id="aiSummarySection">
-                <div class="ai-summary-header">
-                    <span class="ai-icon">🧠</span>
-                    <h4>Резюме от AI</h4>
-                    <span class="ai-badge" id="aiBadge">GPT</span>
-                </div>
-                <div class="ai-summary-content" id="aiSummaryContent"></div>
-            </div>
+            <a class="sidebar-item" data-view="tools" data-tool="toolAnonymize" href="#anonymize">
+                <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                </svg>
+                <span class="sidebar-label">Обезличивание</span>
+            </a>
+            <a class="sidebar-item" data-view="tools" data-tool="daToolOcr" href="#ocr">
+                <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    <line x1="8" y1="11" x2="14" y2="11" />
+                    <line x1="8" y1="8" x2="14" y2="8" />
+                    <line x1="8" y1="14" x2="12" y2="14" />
+                </svg>
+                <span class="sidebar-label">OCR</span>
+            </a>
+            <a class="sidebar-item" data-view="tools" data-tool="daToolAsk" href="#ask">
+                <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    <path d="M12 8a1.5 1.5 0 0 0-1.5 1.5c0 .83.67 1.5 1.5 1.5" />
+                    <circle cx="12" cy="14" r="0.5" fill="currentColor" />
+                </svg>
+                <span class="sidebar-label">Вопрос</span>
+            </a>
+            <a class="sidebar-item" data-view="tools" data-tool="daToolProtocol" href="#protocol">
+                <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                    <rect x="8" y="2" width="8" height="4" rx="1" />
+                    <line x1="9" y1="10" x2="15" y2="10" />
+                    <line x1="9" y1="14" x2="15" y2="14" />
+                    <line x1="9" y1="18" x2="13" y2="18" />
+                </svg>
+                <span class="sidebar-label">Протокол</span>
+            </a>
+            <a class="sidebar-item" data-view="tools" data-tool="daToolTable" href="#tables">
+                <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <line x1="3" y1="9" x2="21" y2="9" />
+                    <line x1="3" y1="15" x2="21" y2="15" />
+                    <line x1="9" y1="3" x2="9" y2="21" />
+                    <line x1="15" y1="3" x2="15" y2="21" />
+                </svg>
+                <span class="sidebar-label">Таблицы</span>
+            </a>
+            <a class="sidebar-item" data-view="tools" data-tool="daToolMindmap" href="#mindmap">
+                <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <circle cx="5" cy="5" r="2" />
+                    <circle cx="19" cy="5" r="2" />
+                    <circle cx="5" cy="19" r="2" />
+                    <circle cx="19" cy="19" r="2" />
+                    <line x1="9.5" y1="9.5" x2="6.5" y2="6.5" />
+                    <line x1="14.5" y1="9.5" x2="17.5" y2="6.5" />
+                    <line x1="9.5" y1="14.5" x2="6.5" y2="17.5" />
+                    <line x1="14.5" y1="14.5" x2="17.5" y2="17.5" />
+                </svg>
+                <span class="sidebar-label">Ментальные карты</span>
+            </a>
+            <a class="sidebar-item" data-view="tools" data-tool="daToolCheck" href="#check">
+                <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path
+                        d="M12 3l1.912 5.813h6.176l-5 3.637 1.912 5.813L12 14.625l-5 3.638 1.912-5.813-5-3.637h6.176z" />
+                </svg>
+                <span class="sidebar-label">Проверка</span>
+            </a>
+            <a class="sidebar-item" data-view="tools" data-tool="daToolTranslate" href="#translate">
+                <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="2" y1="12" x2="22" y2="12" />
+                    <path
+                        d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z" />
+                </svg>
+                <span class="sidebar-label">Перевод</span>
+            </a>
+        </nav>
+    </aside>
 
-            <div class="diff-container" id="diffContainer">
-                <div class="diff-header">
-                    <div class="diff-title-left">
-                        <span class="diff-label">📄 Оригинал</span>
-                        <span class="diff-filename" id="diffFilename1">—</span>
+    <!-- Main Content -->
+    <div class="main-content" id="mainContent">
+        <!-- Top Navbar -->
+        <nav class="navbar">
+            <div class="navbar-inner">
+                <div class="nav-right">
+                    <div class="anon-ml-status" style="margin-right: 20px;">
+                        <span class="anon-status-dot" id="gptStatusAnon" title="GPT">GPT</span>
+                        <span class="anon-status-dot" id="visionStatusAnon" title="Vision">Vision</span>
                     </div>
-                    <div class="diff-title-right">
-                        <span class="diff-label">📄 Изменённый</span>
-                        <span class="diff-filename" id="diffFilename2">—</span>
-                    </div>
-                </div>
-                <div class="diff-table-wrapper">
-                    <table class="diff-table" id="diffTable">
-                        <tbody id="diffBody"></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="diff-legend">
-                <span class="legend-item"><span class="legend-color deleted"></span> Удалено</span>
-                <span class="legend-item"><span class="legend-color added"></span> Добавлено</span>
-                <span class="legend-item"><span class="legend-color modified"></span> Изменено</span>
-                <span class="legend-item"><span class="legend-color unchanged"></span> Без изменений</span>
-            </div>
-        </div>
-    </section>
-
-    <!-- Merge Section -->
-    <section class="section hidden" id="merge">
-        <div class="section-header">
-            <h2 class="section-title">Слияние документов</h2>
-        </div>
-
-        <!-- Upload Zone for Merge -->
-        <div class="upload-zone" id="uploadZoneMerge">
-            <div class="upload-icon">📁</div>
-            <h3>Перетащите файлы сюда</h3>
-            <p>или нажмите для выбора</p>
-            <span class="upload-formats">PDF, DOCX, TXT • до 50 МБ</span>
-            <span class="upload-retention">⏱️ Файлы хранятся 7 дней</span>
-            <input type="file" id="fileInputMerge" multiple accept=".pdf,.docx,.txt" hidden>
-            <button class="btn btn-outline" onclick="document.getElementById('fileInputMerge').click()">Выбрать
-                файлы</button>
-        </div>
-
-        <div class="merge-panel">
-            <div class="merge-docs-selector">
-                <label>Выберите документы для слияния (2-10)</label>
-                <div class="merge-docs-list" id="mergeDocsList"></div>
-            </div>
-
-            <div class="merge-strategy">
-                <label>Стратегия слияния</label>
-                <div class="strategy-options">
-                    <button class="strategy-btn active" data-strategy="MOST_RECENT">
-                        <span class="strategy-icon">🕐</span>
-                        <span class="strategy-name">Самая новая</span>
-                        <span class="strategy-desc">Последняя версия имеет приоритет</span>
-                    </button>
-                    <button class="strategy-btn" data-strategy="MANUAL">
-                        <span class="strategy-icon">✋</span>
-                        <span class="strategy-name">Вручную</span>
-                        <span class="strategy-desc">Проверка всех конфликтов</span>
-                    </button>
-                </div>
-            </div>
-
-            <button class="btn btn-primary btn-large" onclick="startMerge()">Начать слияние</button>
-
-            <!-- Inline Progress & Logs for Merge -->
-            <div class="inline-progress hidden" id="mergeProgress">
-                <div class="progress-header-inline">
-                    <span class="progress-title-inline">Обработка...</span>
-                    <span class="progress-percent-inline">0%</span>
-                </div>
-                <div class="progress-bar-inline">
-                    <div class="progress-fill-inline"></div>
-                </div>
-                <div class="log-section">
-                    <div class="log-section-header" onclick="toggleLogSection('mergeProgress')">
-                        <span class="log-section-title">
-                            📋 Журнал операций
-                            <span class="log-count">0 записей</span>
-                        </span>
-                        <span class="log-toggle-icon">▼</span>
-                    </div>
-                    <div class="inline-log"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Merge Results -->
-        <div class="merge-results hidden" id="mergeResults">
-            <div class="merge-header">
-                <h3>Результаты слияния</h3>
-                <div class="merge-stats">
-                    <span class="merge-stat"><strong id="mergeConflicts">0</strong> Конфликтов</span>
-                    <span class="merge-stat success"><strong id="mergeAutoResolved">0</strong> Авто-разрешено</span>
-                </div>
-            </div>
-
-            <div class="conflicts-list" id="conflictsList"></div>
-
-            <div class="merge-actions">
-                <button class="btn btn-outline" onclick="cancelMerge()">Отменить</button>
-                <button class="btn btn-primary" id="finalizeMergeBtn" onclick="finalizeMerge()">Завершить
-                    слияние</button>
-            </div>
-        </div>
-    </section>
-
-    <!-- Anonymize Section -->
-    <section class="section hidden" id="anonymize">
-        <div class="section-header">
-            <h2 class="section-title">Обезличивание документов</h2>
-        </div>
-
-        <!-- Upload Zone for Anonymizer -->
-        <div class="anon-upload-zone" id="uploadZoneAnon">
-            <div class="upload-icon">🔒</div>
-            <h3>Перетащите файл для обезличивания</h3>
-            <p>или нажмите для выбора</p>
-            <span class="upload-formats">DOCX, XLSX, XLS, PDF • до 50 МБ</span>
-            <input type="file" id="fileInputAnon" accept=".docx,.xlsx,.xls,.pdf" hidden>
-            <button class="btn btn-outline" onclick="document.getElementById('fileInputAnon').click()">Выбрать
-                файл</button>
-        </div>
-
-        <!-- File Info -->
-        <div class="anon-file-info" id="fileInfoAnon" style="display: none;">
-            <div class="anon-file-icon">📄</div>
-            <div class="anon-file-details">
-                <span class="anon-file-name" id="fileNameAnon"></span>
-                <span class="anon-file-size" id="fileSizeAnon"></span>
-            </div>
-            <button class="btn btn-outline btn-sm" id="removeFileAnon">✕</button>
-        </div>
-
-        <!-- Settings -->
-        <div class="anon-settings" id="anonSettings">
-            <div class="anon-settings-header">
-                <h3>Параметры обезличивания</h3>
-                <div class="anon-profile-selector">
-                    <select id="profileSelectAnon" class="select-input">
-                        <option value="">Выберите профиль...</option>
-                        <option value="full">Полное обезличивание</option>
-                        <option value="media">Для СМИ</option>
-                        <option value="partners">Для партнеров</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="anon-options-grid">
-                <label class="anon-option-card" data-option="prices">
-                    <input type="checkbox" name="anonOption" value="prices">
-                    <div class="anon-option-content">
-                        <span class="anon-option-label">💰 Цены и суммы</span>
-                        <span class="anon-option-desc">Замена денежных значений</span>
-                    </div>
-                </label>
-                <label class="anon-option-card" data-option="companies">
-                    <input type="checkbox" name="anonOption" value="companies">
-                    <div class="anon-option-content">
-                        <span class="anon-option-label">🏢 Названия компаний</span>
-                        <span class="anon-option-desc">Замена названий организаций</span>
-                    </div>
-                </label>
-                <label class="anon-option-card" data-option="logos">
-                    <input type="checkbox" name="anonOption" value="logos">
-                    <div class="anon-option-content">
-                        <span class="anon-option-label">🖼️ Логотипы</span>
-                        <span class="anon-option-desc">Удаление изображений логотипов</span>
-                    </div>
-                </label>
-                <label class="anon-option-card" data-option="personal">
-                    <input type="checkbox" name="anonOption" value="personal">
-                    <div class="anon-option-content">
-                        <span class="anon-option-label">👤 ФИО и контакты</span>
-                        <span class="anon-option-desc">Замена персональных данных</span>
-                    </div>
-                </label>
-                <label class="anon-option-card" data-option="addresses">
-                    <input type="checkbox" name="anonOption" value="addresses">
-                    <div class="anon-option-content">
-                        <span class="anon-option-label">📍 Адреса и геолокация</span>
-                        <span class="anon-option-desc">Удаление физических адресов</span>
-                    </div>
-                </label>
-                <label class="anon-option-card" data-option="requisites">
-                    <input type="checkbox" name="anonOption" value="requisites">
-                    <div class="anon-option-content">
-                        <span class="anon-option-label">🏛️ Реквизиты</span>
-                        <span class="anon-option-desc">Удаление ИНН, ОГРН, счетов</span>
-                    </div>
-                </label>
-                <label class="anon-option-card" data-option="dates">
-                    <input type="checkbox" name="anonOption" value="dates">
-                    <div class="anon-option-content">
-                        <span class="anon-option-label">📅 Даты и сроки</span>
-                        <span class="anon-option-desc">Замена абсолютных дат</span>
-                    </div>
-                </label>
-                <label class="anon-option-card" data-option="technical">
-                    <input type="checkbox" name="anonOption" value="technical">
-                    <div class="anon-option-content">
-                        <span class="anon-option-label">⚙️ Технические детали</span>
-                        <span class="anon-option-desc">Замена продуктов и версий</span>
-                    </div>
-                </label>
-                <label class="anon-option-card" data-option="metadata">
-                    <input type="checkbox" name="anonOption" value="metadata">
-                    <div class="anon-option-content">
-                        <span class="anon-option-label">📋 Метаданные файлов</span>
-                        <span class="anon-option-desc">Очистка служебной информации</span>
-                    </div>
-                </label>
-                <label class="anon-option-card" data-option="watermarks">
-                    <input type="checkbox" name="anonOption" value="watermarks">
-                    <div class="anon-option-content">
-                        <span class="anon-option-label">💧 Водяные знаки</span>
-                        <span class="anon-option-desc">Удаление визуальных идентификаторов</span>
-                    </div>
-                </label>
-            </div>
-
-            <div class="anon-settings-actions">
-                <button class="btn btn-outline btn-sm" id="selectAllAnon">Выбрать все</button>
-                <button class="btn btn-outline btn-sm" id="clearAllAnon">Сбросить все</button>
-            </div>
-        </div>
-
-        <!-- Process Button -->
-        <button class="btn btn-primary btn-large" id="processBtnAnon" disabled>🔒 Обезличить документ</button>
-
-        <!-- Progress Section -->
-        <div class="inline-progress hidden" id="progressSectionAnon">
-            <div class="progress-header-inline">
-                <span class="progress-title-inline" id="progressStatusAnon">Обработка...</span>
-                <span class="progress-percent-inline" id="progressPercentAnon">0%</span>
-            </div>
-            <div class="progress-bar-inline">
-                <div class="progress-fill-inline" id="progressFillAnon"></div>
-            </div>
-            <div class="anon-progress-message" id="progressMessageAnon"></div>
-            <div class="anon-process-logs" id="processLogsAnon">
-                <h4>📋 Журнал обработки:</h4>
-                <div class="anon-logs-content" id="logsContentAnon"></div>
-            </div>
-        </div>
-
-        <!-- Results Section -->
-        <div class="anon-results hidden" id="resultsSectionAnon">
-            <div class="anon-results-header">
-                <h3>Результаты обезличивания</h3>
-                <div class="anon-validation-badge" id="validationBadgeAnon"></div>
-            </div>
-            <div class="anon-results-stats">
-                <div class="stat"><span class="stat-value" id="replacementsCountAnon">0</span><span
-                        class="stat-label">Замен</span></div>
-                <div class="stat"><span class="stat-value" id="confidenceValueAnon">0%</span><span
-                        class="stat-label">Уверенность</span></div>
-            </div>
-            <div class="anon-validation-issues" id="validationIssuesAnon" style="display: none;">
-                <details>
-                    <summary>⚠️ Обнаружены проблемы</summary>
-                    <ul id="issuesListAnon"></ul>
-                </details>
-            </div>
-            <div class="anon-results-actions">
-                <button class="btn btn-primary" id="downloadBtnAnon">⬇️ Скачать файл</button>
-                <button class="btn btn-primary" id="downloadPdfBtnAnon" style="display: none;">📄 Скачать PDF</button>
-                <button class="btn btn-outline" id="viewBtnAnon">👁️ Просмотр</button>
-                <button class="btn btn-outline" id="previewBtnAnon">🔍 Сравнение</button>
-                <button class="btn btn-outline" id="mappingBtnAnon">📋 Журнал замен</button>
-            </div>
-        </div>
-
-        <!-- Preview Modal -->
-        <div class="anon-preview-modal" id="previewModalAnon">
-            <div class="modal-backdrop"></div>
-            <div class="anon-modal-content">
-                <div class="anon-modal-header">
-                    <h3>Сравнение: до и после</h3>
-                    <button class="btn btn-outline btn-sm" id="closePreviewAnon">✕</button>
-                </div>
-                <div class="anon-modal-body">
-                    <div class="anon-preview-col">
-                        <h4>Оригинал</h4>
-                        <pre id="originalPreviewAnon"></pre>
-                    </div>
-                    <div class="anon-preview-col">
-                        <h4>Обезличено</h4>
-                        <pre id="anonymizedPreviewAnon"></pre>
+                    <div class="user-info" id="userInfo">
+                        <span class="user-name" id="userName">Загрузка...</span>
+                        <button class="btn btn-outline btn-sm" onclick="logout()">Выход</button>
                     </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </nav>
 
-    <!-- Document Analysis Section -->
-    <section class="section hidden" id="docanalysis">
-        <div class="section-header">
-            <h2 class="section-title">Анализ документа</h2>
-            <span class="da-subtitle">Загрузите документ для анализа, поиска, вопросов и суммаризации</span>
-        </div>
+        <!-- Compare Section -->
+        <section class="section" id="compare">
+            <div class="section-header">
+                <h2 class="section-title">Сравнение документов</h2>
+            </div>
 
-        <!-- Upload Zone -->
-        <div class="da-upload-zone" id="uploadZoneDA">
-            <div class="upload-icon">📊</div>
-            <h3>Перетащите документ для анализа</h3>
-            <p>или нажмите для выбора</p>
-            <span class="upload-formats">PDF, DOCX, DOC, XLSX, XLS, TXT • до 50 МБ</span>
-            <input type="file" id="fileInputDA" accept=".pdf,.docx,.doc,.xlsx,.xls,.txt" hidden>
-            <button class="btn btn-outline" onclick="document.getElementById('fileInputDA').click()">Выбрать
-                файл</button>
-        </div>
+            <!-- Upload Zone -->
+            <div class="upload-zone" id="uploadZone">
+                <div class="upload-icon">📁</div>
+                <h3>Перетащите файлы сюда</h3>
+                <p>или нажмите для выбора</p>
+                <span class="upload-formats">PDF, DOCX, TXT • до 50 МБ</span>
+                <span class="upload-retention">⏱️ Файлы хранятся 7 дней</span>
+                <input type="file" id="fileInput" multiple accept=".pdf,.docx,.txt" hidden>
+                <button class="btn btn-outline" onclick="document.getElementById('fileInput').click()">Выбрать
+                    файлы</button>
+            </div>
 
-        <!-- File Info -->
-        <div class="da-file-info hidden" id="daFileInfo">
-            <div class="da-file-badge">
-                <span class="da-file-icon">📄</span>
-                <div class="da-file-details">
-                    <span class="da-file-name" id="daFileName"></span>
-                    <span class="da-file-size" id="daFileSize"></span>
+            <!-- Documents List -->
+            <div class="docs-list-compact" id="docsListCompact">
+                <div class="docs-header">
+                    <span>Загруженные файлы</span>
+                    <span class="doc-count" id="docCount">0 файлов</span>
                 </div>
-                <button class="btn btn-outline btn-sm" id="daRemoveFile" onclick="daRemoveDocument()">✕</button>
+                <div class="docs-items" id="docsItems"></div>
             </div>
-        </div>
 
-        <!-- Stats Grid -->
-        <div class="da-stats-grid hidden" id="daStatsGrid">
-            <div class="da-stat-card">
-                <span class="da-stat-icon">📑</span>
-                <span class="da-stat-value" id="daSheetsCount">0</span>
-                <span class="da-stat-label">Листов / Страниц</span>
+            <div class="compare-panel">
+                <div class="compare-selectors">
+                    <div class="selector-box">
+                        <label>Документ 1 (Оригинал)</label>
+                        <select id="doc1Select" class="select-input">
+                            <option value="">Выберите документ</option>
+                        </select>
+                    </div>
+                    <div class="vs-divider">⇋</div>
+                    <div class="selector-box">
+                        <label>Документ 2 (Изменённый)</label>
+                        <select id="doc2Select" class="select-input">
+                            <option value="">Выберите документ</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="modes-section">
+                    <label>Режим сравнения</label>
+                    <div class="modes-grid modes-grid-2">
+                        <button class="mode-btn active" data-mode="line-by-line">
+                            <span class="mode-icon">📝</span>
+                            <span class="mode-name">Построчно</span>
+                            <span class="mode-desc">Классическое сравнение</span>
+                        </button>
+                        <button class="mode-btn" data-mode="semantic">
+                            <span class="mode-icon">🧠</span>
+                            <span class="mode-name">Семантика + AI</span>
+                            <span class="mode-desc">Анализ смысла</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="ai-prompt-section hidden" id="aiPromptSection">
+                    <label for="customPrompt">Дополнительный запрос к AI (опционально)</label>
+                    <textarea id="customPrompt" class="ai-prompt-input"
+                        placeholder="Например: 'Сосредоточься на финансовых изменениях' или 'Оцени юридические риски'"
+                        rows="2"></textarea>
+                </div>
+
+                <div class="compare-options">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="showFullDocument">
+                        <span class="checkmark"></span>
+                        Показать полный документ с выделением изменений
+                    </label>
+                </div>
+
+                <button class="btn btn-primary btn-large" id="compareBtn" onclick="runComparison()">
+                    Сравнить документы
+                </button>
+
+                <!-- Inline Progress & Logs for Compare -->
+                <div class="inline-progress hidden" id="compareProgress">
+                    <div class="progress-header-inline">
+                        <span class="progress-title-inline">Обработка...</span>
+                        <span class="progress-percent-inline">0%</span>
+                    </div>
+                    <div class="progress-bar-inline">
+                        <div class="progress-fill-inline"></div>
+                    </div>
+                    <div class="log-section">
+                        <div class="log-section-header" onclick="toggleLogSection('compareProgress')">
+                            <span class="log-section-title">
+                                📋 Журнал операций
+                                <span class="log-count">0 записей</span>
+                            </span>
+                            <span class="log-toggle-icon">▼</span>
+                        </div>
+                        <div class="inline-log"></div>
+                    </div>
+                </div>
             </div>
-            <div class="da-stat-card">
-                <span class="da-stat-icon">📑</span>
-                <span class="da-stat-value" id="daTotalTokens">0</span>
-                <span class="da-stat-label">Токенов</span>
+
+            <!-- Results Panel -->
+            <div class="results-panel hidden" id="resultsPanel">
+                <div class="results-header">
+                    <h3>Результаты сравнения</h3>
+                    <div class="results-stats">
+                        <div class="stat"><span class="stat-value" id="totalChanges">0</span><span
+                                class="stat-label">Изменений</span></div>
+                        <div class="stat critical"><span class="stat-value" id="criticalChanges">0</span><span
+                                class="stat-label">🔴 Критичных</span></div>
+                        <div class="stat major"><span class="stat-value" id="majorChanges">0</span><span
+                                class="stat-label">🟡 Важных</span></div>
+                        <div class="stat minor"><span class="stat-value" id="minorChanges">0</span><span
+                                class="stat-label">🟢 Мелких</span></div>
+                        <div class="stat"><span class="stat-value" id="similarity">0%</span><span
+                                class="stat-label">Схожесть</span></div>
+                    </div>
+                </div>
+
+                <div class="mode-info hidden" id="modeInfo"></div>
+
+                <div class="ai-summary-section hidden" id="aiSummarySection">
+                    <div class="ai-summary-header">
+                        <span class="ai-icon">🧠</span>
+                        <h4>Резюме от AI</h4>
+                        <span class="ai-badge" id="aiBadge">GPT</span>
+                    </div>
+                    <div class="ai-summary-content" id="aiSummaryContent"></div>
+                </div>
+
+                <div class="diff-container" id="diffContainer">
+                    <div class="diff-header">
+                        <div class="diff-title-left">
+                            <span class="diff-label">📄 Оригинал</span>
+                            <span class="diff-filename" id="diffFilename1">—</span>
+                        </div>
+                        <div class="diff-title-right">
+                            <span class="diff-label">📄 Изменённый</span>
+                            <span class="diff-filename" id="diffFilename2">—</span>
+                        </div>
+                    </div>
+                    <div class="diff-table-wrapper">
+                        <table class="diff-table" id="diffTable">
+                            <tbody id="diffBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="diff-legend">
+                    <span class="legend-item"><span class="legend-color deleted"></span> Удалено</span>
+                    <span class="legend-item"><span class="legend-color added"></span> Добавлено</span>
+                    <span class="legend-item"><span class="legend-color modified"></span> Изменено</span>
+                    <span class="legend-item"><span class="legend-color unchanged"></span> Без изменений</span>
+                </div>
             </div>
-            <div class="da-stat-card">
-                <span class="da-stat-icon">💰</span>
-                <span class="da-stat-value" id="daEstCost">~0.00 руб</span>
-                <span class="da-stat-label">
-                    <input type="number" id="daCostRate" value="100" step="1" min="0"
-                        style="width: 60px; padding: 2px;">
-                    руб/1к
-                </span>
+        </section>
+
+        <!-- Merge Section -->
+        <section class="section hidden" id="merge">
+            <div class="section-header">
+                <h2 class="section-title">Слияние документов</h2>
             </div>
-        </div>
 
-        <!-- Sheet Details (Collapsed by default) -->
-        <details class="da-sheets-details hidden" id="daSheetsDetails">
-            <summary>Детализация по листам</summary>
-            <div class="da-sheets-list" id="daSheetsList"></div>
-        </details>
+            <!-- Upload Zone for Merge -->
+            <div class="upload-zone" id="uploadZoneMerge">
+                <div class="upload-icon">📁</div>
+                <h3>Перетащите файлы сюда</h3>
+                <p>или нажмите для выбора</p>
+                <span class="upload-formats">PDF, DOCX, TXT • до 50 МБ</span>
+                <span class="upload-retention">⏱️ Файлы хранятся 7 дней</span>
+                <input type="file" id="fileInputMerge" multiple accept=".pdf,.docx,.txt" hidden>
+                <button class="btn btn-outline" onclick="document.getElementById('fileInputMerge').click()">Выбрать
+                    файлы</button>
+            </div>
 
-        <!-- Tools Panel -->
-        <div class="da-tools-panel hidden" id="daToolsPanel">
+            <div class="merge-panel">
+                <div class="merge-docs-selector">
+                    <label>Выберите документы для слияния (2-10)</label>
+                    <div class="merge-docs-list" id="mergeDocsList"></div>
+                </div>
 
-            <!-- Custom Prompt -->
-            <div class="da-custom-prompt-box">
-                <label for="daCustomPrompt">📝 Дополнительные указания для AI (опционально)</label>
-                <textarea id="daCustomPrompt" class="da-custom-prompt" rows="2"
-                    placeholder="Например: 'Суммаризируй только финансовую часть' или 'Сделай таблицу с ФИО и должностями'"></textarea>
+                <div class="merge-strategy">
+                    <label>Стратегия слияния</label>
+                    <div class="strategy-options">
+                        <button class="strategy-btn active" data-strategy="MOST_RECENT">
+                            <span class="strategy-icon">🕐</span>
+                            <span class="strategy-name">Самая новая</span>
+                            <span class="strategy-desc">Последняя версия имеет приоритет</span>
+                        </button>
+                        <button class="strategy-btn" data-strategy="MANUAL">
+                            <span class="strategy-icon">✋</span>
+                            <span class="strategy-name">Вручную</span>
+                            <span class="strategy-desc">Проверка всех конфликтов</span>
+                        </button>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary btn-large" onclick="startMerge()">Начать слияние</button>
+
+                <!-- Inline Progress & Logs for Merge -->
+                <div class="inline-progress hidden" id="mergeProgress">
+                    <div class="progress-header-inline">
+                        <span class="progress-title-inline">Обработка...</span>
+                        <span class="progress-percent-inline">0%</span>
+                    </div>
+                    <div class="progress-bar-inline">
+                        <div class="progress-fill-inline"></div>
+                    </div>
+                    <div class="log-section">
+                        <div class="log-section-header" onclick="toggleLogSection('mergeProgress')">
+                            <span class="log-section-title">
+                                📋 Журнал операций
+                                <span class="log-count">0 записей</span>
+                            </span>
+                            <span class="log-toggle-icon">▼</span>
+                        </div>
+                        <div class="inline-log"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Merge Results -->
+            <div class="merge-results hidden" id="mergeResults">
+                <div class="merge-header">
+                    <h3>Результаты слияния</h3>
+                    <div class="merge-stats">
+                        <span class="merge-stat"><strong id="mergeConflicts">0</strong> Конфликтов</span>
+                        <span class="merge-stat success"><strong id="mergeAutoResolved">0</strong> Авто-разрешено</span>
+                    </div>
+                </div>
+
+                <div class="conflicts-list" id="conflictsList"></div>
+
+                <div class="merge-actions">
+                    <button class="btn btn-outline" onclick="cancelMerge()">Отменить</button>
+                    <button class="btn btn-primary" id="finalizeMergeBtn" onclick="finalizeMerge()">Завершить
+                        слияние</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Unified Tools Section (Anonymize + Doc Analysis) -->
+        <section class="section hidden" id="tools">
+            <div class="section-header">
+                <h2 class="section-title" id="toolsSectionTitle">Инструменты</h2>
+            </div>
+
+            <!-- Shared Upload Zone -->
+            <div class="upload-zone" id="uploadZoneTools">
+                <div class="upload-icon">📁</div>
+                <h3>Перетащите файл сюда</h3>
+                <p>или нажмите для выбора</p>
+                <span class="upload-formats">PDF, DOCX, DOC, XLSX, XLS, TXT • до 50 МБ</span>
+                <input type="file" id="fileInputTools" accept=".pdf,.docx,.doc,.xlsx,.xls,.txt" hidden>
+                <button class="btn btn-outline" onclick="document.getElementById('fileInputTools').click()">Выбрать
+                    файл</button>
+            </div>
+
+            <!-- File Info -->
+            <div class="da-file-info hidden" id="toolsFileInfo">
+                <div class="da-file-badge">
+                    <span class="da-file-icon">📄</span>
+                    <div class="da-file-details">
+                        <span class="da-file-name" id="toolsFileName"></span>
+                        <span class="da-file-size" id="toolsFileSize"></span>
+                    </div>
+                    <button class="btn btn-outline btn-sm" onclick="toolsRemoveFile()">✕</button>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="da-stats-grid hidden" id="daStatsGrid">
+                <div class="da-stat-card">
+                    <span class="da-stat-icon">📑</span>
+                    <span class="da-stat-value" id="daSheetsCount">0</span>
+                    <span class="da-stat-label">Листов / Страниц</span>
+                </div>
+                <div class="da-stat-card">
+                    <span class="da-stat-icon">📑</span>
+                    <span class="da-stat-value" id="daTotalTokens">0</span>
+                    <span class="da-stat-label">Токенов</span>
+                </div>
+                <div class="da-stat-card">
+                    <span class="da-stat-icon">💰</span>
+                    <span class="da-stat-value" id="daEstCost">~0.00 руб</span>
+                    <span class="da-stat-label">
+                        <input type="number" id="daCostRate" value="100" step="1" min="0"
+                            style="width: 60px; padding: 2px;">
+                        руб/1к
+                    </span>
+                </div>
+            </div>
+
+            <!-- Sheet Details (Collapsed by default) -->
+            <details class="da-sheets-details hidden" id="daSheetsDetails">
+                <summary>Детализация по листам</summary>
+                <div class="da-sheets-list" id="daSheetsList"></div>
+            </details>
+
+            <!-- ======================== TOOL PANELS ======================== -->
+
+            <!-- Anonymize Panel -->
+            <div id="toolAnonymize" class="tool-panel hidden">
+                <!-- Settings -->
+                <div class="anon-settings" id="anonSettings">
+                    <div class="anon-settings-header">
+                        <h3>Параметры обезличивания</h3>
+                        <div class="anon-profile-selector">
+                            <select id="profileSelectAnon" class="select-input">
+                                <option value="">Выберите профиль...</option>
+                                <option value="full">Полное обезличивание</option>
+                                <option value="media">Для СМИ</option>
+                                <option value="partners">Для партнеров</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="anon-options-grid">
+                        <label class="anon-option-card" data-option="prices">
+                            <input type="checkbox" name="anonOption" value="prices">
+                            <div class="anon-option-content">
+                                <span class="anon-option-label">💰 Цены и суммы</span>
+                                <span class="anon-option-desc">Замена денежных значений</span>
+                            </div>
+                        </label>
+                        <label class="anon-option-card" data-option="companies">
+                            <input type="checkbox" name="anonOption" value="companies">
+                            <div class="anon-option-content">
+                                <span class="anon-option-label">🏢 Названия компаний</span>
+                                <span class="anon-option-desc">Замена названий организаций</span>
+                            </div>
+                        </label>
+                        <label class="anon-option-card" data-option="logos">
+                            <input type="checkbox" name="anonOption" value="logos">
+                            <div class="anon-option-content">
+                                <span class="anon-option-label">🖼️ Логотипы</span>
+                                <span class="anon-option-desc">Удаление изображений логотипов</span>
+                            </div>
+                        </label>
+                        <label class="anon-option-card" data-option="personal">
+                            <input type="checkbox" name="anonOption" value="personal">
+                            <div class="anon-option-content">
+                                <span class="anon-option-label">👤 ФИО и контакты</span>
+                                <span class="anon-option-desc">Замена персональных данных</span>
+                            </div>
+                        </label>
+                        <label class="anon-option-card" data-option="addresses">
+                            <input type="checkbox" name="anonOption" value="addresses">
+                            <div class="anon-option-content">
+                                <span class="anon-option-label">📍 Адреса и геолокация</span>
+                                <span class="anon-option-desc">Удаление физических адресов</span>
+                            </div>
+                        </label>
+                        <label class="anon-option-card" data-option="requisites">
+                            <input type="checkbox" name="anonOption" value="requisites">
+                            <div class="anon-option-content">
+                                <span class="anon-option-label">🏛️ Реквизиты</span>
+                                <span class="anon-option-desc">Удаление ИНН, ОГРН, счетов</span>
+                            </div>
+                        </label>
+                        <label class="anon-option-card" data-option="dates">
+                            <input type="checkbox" name="anonOption" value="dates">
+                            <div class="anon-option-content">
+                                <span class="anon-option-label">📅 Даты и сроки</span>
+                                <span class="anon-option-desc">Замена абсолютных дат</span>
+                            </div>
+                        </label>
+                        <label class="anon-option-card" data-option="technical">
+                            <input type="checkbox" name="anonOption" value="technical">
+                            <div class="anon-option-content">
+                                <span class="anon-option-label">⚙️ Технические детали</span>
+                                <span class="anon-option-desc">Замена продуктов и версий</span>
+                            </div>
+                        </label>
+                        <label class="anon-option-card" data-option="metadata">
+                            <input type="checkbox" name="anonOption" value="metadata">
+                            <div class="anon-option-content">
+                                <span class="anon-option-label">📋 Метаданные файлов</span>
+                                <span class="anon-option-desc">Очистка служебной информации</span>
+                            </div>
+                        </label>
+                        <label class="anon-option-card" data-option="watermarks">
+                            <input type="checkbox" name="anonOption" value="watermarks">
+                            <div class="anon-option-content">
+                                <span class="anon-option-label">💧 Водяные знаки</span>
+                                <span class="anon-option-desc">Удаление визуальных идентификаторов</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="anon-settings-actions">
+                        <button class="btn btn-outline btn-sm" id="selectAllAnon">Выбрать все</button>
+                        <button class="btn btn-outline btn-sm" id="clearAllAnon">Сбросить все</button>
+                    </div>
+                </div>
+
+                <!-- Process Button -->
+                <button class="btn btn-primary btn-large" id="processBtnAnon" disabled>🔒 Обезличить документ</button>
+
+                <!-- Progress Section -->
+                <div class="inline-progress hidden" id="progressSectionAnon">
+                    <div class="progress-header-inline">
+                        <span class="progress-title-inline" id="progressStatusAnon">Обработка...</span>
+                        <span class="progress-percent-inline" id="progressPercentAnon">0%</span>
+                    </div>
+                    <div class="progress-bar-inline">
+                        <div class="progress-fill-inline" id="progressFillAnon"></div>
+                    </div>
+                    <div class="anon-progress-message" id="progressMessageAnon"></div>
+                    <div class="anon-process-logs" id="processLogsAnon">
+                        <h4>📋 Журнал обработки:</h4>
+                        <div class="anon-logs-content" id="logsContentAnon"></div>
+                    </div>
+                </div>
+
+                <!-- Results Section -->
+                <div class="anon-results hidden" id="resultsSectionAnon">
+                    <div class="anon-results-header">
+                        <h3>Результаты обезличивания</h3>
+                        <div class="anon-validation-badge" id="validationBadgeAnon"></div>
+                    </div>
+                    <div class="anon-results-stats">
+                        <div class="stat"><span class="stat-value" id="replacementsCountAnon">0</span><span
+                                class="stat-label">Замен</span></div>
+                        <div class="stat"><span class="stat-value" id="confidenceValueAnon">0%</span><span
+                                class="stat-label">Уверенность</span></div>
+                    </div>
+                    <div class="anon-validation-issues" id="validationIssuesAnon" style="display: none;">
+                        <details>
+                            <summary>⚠️ Обнаружены проблемы</summary>
+                            <ul id="issuesListAnon"></ul>
+                        </details>
+                    </div>
+                    <div class="anon-results-actions">
+                        <button class="btn btn-primary" id="downloadBtnAnon">⬇️ Скачать файл</button>
+                        <button class="btn btn-primary" id="downloadPdfBtnAnon" style="display: none;">📄 Скачать
+                            PDF</button>
+                        <button class="btn btn-outline" id="viewBtnAnon">👁️ Просмотр</button>
+                        <button class="btn btn-outline" id="previewBtnAnon">🔍 Сравнение</button>
+                        <button class="btn btn-outline" id="mappingBtnAnon">📋 Журнал замен</button>
+                    </div>
+                </div>
+
+                <!-- Preview Modal -->
+                <div class="anon-preview-modal" id="previewModalAnon">
+                    <div class="modal-backdrop"></div>
+                    <div class="anon-modal-content">
+                        <div class="anon-modal-header">
+                            <h3>Сравнение: до и после</h3>
+                            <button class="btn btn-outline btn-sm" id="closePreviewAnon">✕</button>
+                        </div>
+                        <div class="anon-modal-body">
+                            <div class="anon-preview-col">
+                                <h4>Оригинал</h4>
+                                <pre id="originalPreviewAnon"></pre>
+                            </div>
+                            <div class="anon-preview-col">
+                                <h4>Обезличено</h4>
+                                <pre id="anonymizedPreviewAnon"></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- OCR Tool -->
-            <div class="da-tool-section">
-                <details>
-                    <summary>
-                        <h4>🔍 OCR / Распознавание в DOCX</h4>
-                    </summary>
-                    <div class="da-tool-content">
-                        <p class="da-hint">Преобразовать сканы или PDF-картинки в редактируемый документ с таблицами.
-                        </p>
-                        <div class="da-actions-row">
-                            <button class="btn btn-primary" id="daOcrBtn" onclick="daOCR()">Распознать документ</button>
-                            <button class="btn btn-outline hidden" id="daDownloadOcrBtn" onclick="daDownloadOCR()">⬇️
-                                Скачать DOCX</button>
-                            <button class="btn btn-outline hidden" id="daDownloadOcrPdfBtn"
-                                onclick="daDownloadOCRPDF()">⬇️ PDF</button>
-                        </div>
-                        <div class="da-result-box hidden" id="daOcrResult"></div>
-                    </div>
-                </details>
+            <div id="daToolOcr" class="tool-panel hidden">
+                <h4>🔍 OCR / Распознавание в DOCX</h4>
+                <p class="da-hint">Преобразовать сканы или PDF-картинки в редактируемый документ с таблицами.</p>
+                <div class="da-actions-row">
+                    <button class="btn btn-primary" id="daOcrBtn" onclick="daOCR()">Распознать документ</button>
+                    <button class="btn btn-outline hidden" id="daDownloadOcrBtn" onclick="daDownloadOCR()">⬇️ Скачать
+                        DOCX</button>
+                    <button class="btn btn-outline hidden" id="daDownloadOcrPdfBtn" onclick="daDownloadOCRPDF()">⬇️
+                        PDF</button>
+                </div>
+                <div class="da-result-box hidden" id="daOcrResult"></div>
             </div>
 
             <!-- Q&A -->
-            <div class="da-tool-section">
-                <details>
-                    <summary>
-                        <h4>❓ Вопрос по документу</h4>
-                    </summary>
-                    <div class="da-tool-content">
-                        <div class="da-input-row">
-                            <input type="text" id="daAskInput" class="da-input"
-                                placeholder="Задайте вопрос по содержимому документа...">
-                            <button class="btn btn-primary btn-sm" id="daAskBtn" onclick="daAsk()">Спросить</button>
-                        </div>
-                        <div class="da-result-box hidden" id="daAskResult"></div>
-                    </div>
-                </details>
+            <div id="daToolAsk" class="tool-panel hidden">
+                <h4>❓ Вопрос по документу</h4>
+                <div class="da-input-row">
+                    <input type="text" id="daAskInput" class="da-input"
+                        placeholder="Задайте вопрос по содержимому документа...">
+                    <button class="btn btn-primary btn-sm" id="daAskBtn" onclick="daAsk()">Спросить</button>
+                </div>
+                <div class="da-custom-prompt-box">
+                    <label for="daAskPrompt">📝 Дополнительные указания для AI (опционально)</label>
+                    <textarea id="daAskPrompt" class="da-custom-prompt" rows="2"
+                        placeholder="Например: 'Отвечай кратко' или 'Используй цитаты'"></textarea>
+                </div>
+                <div class="da-result-box hidden" id="daAskResult"></div>
             </div>
 
-            <!-- Summarize -->
-            <div class="da-tool-section">
-                <details>
-                    <summary>
-                        <h4>📋 Протокол / Суммаризация</h4>
-                    </summary>
-                    <div class="da-tool-content">
-                        <div class="da-actions-row">
-                            <button class="btn btn-primary" id="daSummarizeBtn" onclick="daSummarize()">Создать
-                                протокол</button>
-                            <button class="btn btn-outline hidden" id="daDownloadProtocolBtn"
-                                onclick="daDownloadProtocol()">⬇️ Скачать DOCX</button>
-                        </div>
-                        <div class="da-result-box hidden" id="daSummaryResult"></div>
-                    </div>
-                </details>
+            <!-- Summarize (Protocol) -->
+            <div id="daToolProtocol" class="tool-panel hidden">
+                <h4>📋 Протокол / Суммаризация</h4>
+                <div class="da-custom-prompt-box">
+                    <label for="daSummarizePrompt">📝 Дополнительные указания для AI (опционально)</label>
+                    <textarea id="daSummarizePrompt" class="da-custom-prompt" rows="2"
+                        placeholder="Например: 'Суммаризируй только финансовую часть'"></textarea>
+                </div>
+                <div class="da-actions-row">
+                    <button class="btn btn-primary" id="daSummarizeBtn" onclick="daSummarize()">Создать
+                        протокол</button>
+                    <button class="btn btn-outline hidden" id="daDownloadProtocolBtn" onclick="daDownloadProtocol()">⬇️
+                        Скачать DOCX</button>
+                </div>
+                <div class="da-result-box hidden" id="daSummaryResult"></div>
             </div>
 
             <!-- Table Generation -->
-            <div class="da-tool-section">
-                <details>
-                    <summary>
-                        <h4>📊 Извлечение таблиц</h4>
-                    </summary>
-                    <div class="da-tool-content">
-                        <p class="da-hint">AI создаст структуру таблиц на основе данных из документа.</p>
-                        <div class="da-actions-row">
-                            <button class="btn btn-primary" id="daTableBtn" onclick="daGenerateTable()">Сгенерировать
-                                таблицы</button>
-                            <button class="btn btn-outline hidden" id="daDownloadTableBtn"
-                                onclick="daDownloadTable()">⬇️ Скачать XLSX</button>
-                        </div>
-                        <div class="da-result-box hidden" id="daTableResult"></div>
-                    </div>
-                </details>
+            <div id="daToolTable" class="tool-panel hidden">
+                <h4>📊 Извлечение таблиц</h4>
+                <p class="da-hint">AI создаст структуру таблиц на основе данных из документа.</p>
+                <div class="da-custom-prompt-box">
+                    <label for="daTablePrompt">📝 Дополнительные указания для AI (опционально)</label>
+                    <textarea id="daTablePrompt" class="da-custom-prompt" rows="2"
+                        placeholder="Например: 'Сделай таблицу с ФИО и должностями'"></textarea>
+                </div>
+                <div class="da-actions-row">
+                    <button class="btn btn-primary" id="daTableBtn" onclick="daGenerateTable()">Сгенерировать
+                        таблицы</button>
+                    <button class="btn btn-outline hidden" id="daDownloadTableBtn" onclick="daDownloadTable()">⬇️
+                        Скачать XLSX</button>
+                </div>
+                <div class="da-result-box hidden" id="daTableResult"></div>
             </div>
 
-            <div class="da-tool-section">
-                <details>
-                    <summary>
-                        <h4>🧠 Ментальные карты и схемы</h4>
-                    </summary>
-                    <div class="da-tool-content">
-                        <p class="da-hint">AI создаст структуру документа в виде диаграммы.</p>
-                        <div class="da-edit-actions">
-                            <div class="da-edit-group">
-                                <label>Тип схемы:</label>
-                                <select id="daStructureMode" class="select-input">
-                                    <option value="mindmap">Ментальная карта (Mindmap)</option>
-                                    <option value="flowchart">Блок-схема (Flowchart)</option>
-                                    <option value="graph">Граф связей (Graph)</option>
-                                </select>
-                            </div>
-                            <button class="btn btn-primary" id="daStructureBtn" style="margin-top: 10px;"
-                                onclick="daGenerateStructure()">Сгенерировать</button>
-                        </div>
-                        <div class="da-result-actions hidden" id="daStructureDownloadActions" style="margin-top: 15px;">
-                            <button class="btn btn-outline" onclick="daDownloadMermaidPng()">⬇️ Скачать PNG</button>
-                            <button class="btn btn-outline" onclick="daDownloadMermaidSvg()">⬇️ Скачать SVG</button>
-                        </div>
-                        <div class="da-result-box hidden" id="daStructureResult" style="overflow: auto;">
-                            <!-- Mermaid diagrarm will be rendered here -->
-                            <div id="daMermaidContainer"></div>
-                        </div>
+            <!-- Mind Maps -->
+            <div id="daToolMindmap" class="tool-panel hidden">
+                <h4>🧠 Ментальные карты и схемы</h4>
+                <p class="da-hint">AI создаст структуру документа в виде диаграммы.</p>
+                <div class="da-custom-prompt-box">
+                    <label for="daStructurePrompt">📝 Дополнительные указания для AI (опционально)</label>
+                    <textarea id="daStructurePrompt" class="da-custom-prompt" rows="2"
+                        placeholder="Например: 'Сосредоточься на связях отделов'"></textarea>
+                </div>
+                <div class="da-edit-actions">
+                    <div class="da-edit-group">
+                        <label>Тип схемы:</label>
+                        <select id="daStructureMode" class="select-input">
+                            <option value="mindmap">Ментальная карта (Mindmap)</option>
+                            <option value="flowchart">Блок-схема (Flowchart)</option>
+                            <option value="graph">Граф связей (Graph)</option>
+                        </select>
                     </div>
-                </details>
+                    <button class="btn btn-primary" id="daStructureBtn" style="margin-top: 10px;"
+                        onclick="daGenerateStructure()">Сгенерировать</button>
+                </div>
+                <div class="da-result-actions hidden" id="daStructureDownloadActions" style="margin-top: 15px;">
+                    <button class="btn btn-outline" onclick="daDownloadMermaidPng()">⬇️ Скачать PNG</button>
+                    <button class="btn btn-outline" onclick="daDownloadMermaidSvg()">⬇️ Скачать SVG</button>
+                </div>
+                <div class="da-result-box hidden" id="daStructureResult" style="overflow: auto;">
+                    <div id="daMermaidContainer"></div>
+                </div>
             </div>
 
             <!-- Check & Edit -->
-            <div class="da-tool-section">
-                <details>
-                    <summary>
-                        <h4>✨ Проверка и редактирование</h4>
-                    </summary>
-                    <div class="da-tool-content">
-                        <p class="da-hint">AI исправит ошибки, улучшит стиль или перефразирует текст, сохранив
-                            форматирование.</p>
-                        <div class="da-edit-actions">
-                            <div class="da-edit-group">
-                                <label>Действие:</label>
-                                <select id="daEditMode" class="select-input">
-                                    <option value="fix">Исправить ошибки и опечатки</option>
-                                    <option value="style">Улучшить стиль (официальный)</option>
-                                    <option value="toc">Сгенерировать оглавление</option>
-                                    <option value="paraphrase">Перефразировать (повысить уникальность)</option>
-                                </select>
-                            </div>
-                            <button class="btn btn-primary" id="daEditBtn" onclick="daEditDocument()"
-                                style="margin-top: 10px;">Запустить
-                                обработку</button>
-                        </div>
-                        <div class="da-result-actions hidden" id="daEditDownloadActions" style="margin-top: 15px;">
-                            <button class="btn btn-outline" id="daDownloadEditDocxBtn" onclick="daDownloadEditDocx()">⬇️
-                                Скачать DOCX</button>
-                            <button class="btn btn-outline" id="daDownloadEditPdfBtn" onclick="daDownloadEditPdf()">⬇️
-                                Скачать PDF</button>
-                        </div>
-                        <div class="da-result-box hidden" id="daEditResult"></div>
+            <div id="daToolCheck" class="tool-panel hidden">
+                <h4>✨ Проверка и редактирование</h4>
+                <p class="da-hint">AI исправит ошибки, улучшит стиль или перефразирует текст.</p>
+                <div class="da-custom-prompt-box">
+                    <label for="daEditPrompt">📝 Дополнительные указания для AI (опционально)</label>
+                    <textarea id="daEditPrompt" class="da-custom-prompt" rows="2"
+                        placeholder="Например: 'Сделай стиль более официальным'"></textarea>
+                </div>
+                <div class="da-edit-actions">
+                    <div class="da-edit-group">
+                        <label>Действие:</label>
+                        <select id="daEditMode" class="select-input">
+                            <option value="fix">Исправить ошибки и опечатки</option>
+                            <option value="style">Улучшить стиль (официальный)</option>
+                            <option value="toc">Сгенерировать оглавление</option>
+                            <option value="paraphrase">Перефразировать (повысить уникальность)</option>
+                        </select>
                     </div>
-                </details>
+                    <button class="btn btn-primary" id="daEditBtn" onclick="daEditDocument()"
+                        style="margin-top: 10px;">Запустить обработку</button>
+                </div>
+                <div class="da-result-actions hidden" id="daEditDownloadActions" style="margin-top: 15px;">
+                    <button class="btn btn-outline" id="daDownloadEditDocxBtn" onclick="daDownloadEditDocx()">⬇️ Скачать
+                        DOCX</button>
+                    <button class="btn btn-outline" id="daDownloadEditPdfBtn" onclick="daDownloadEditPdf()">⬇️ Скачать
+                        PDF</button>
+                </div>
+                <div class="da-result-box hidden" id="daEditResult"></div>
             </div>
 
-        </div>
-    </section>
+            <!-- Translation Tool -->
+            <div id="daToolTranslate" class="tool-panel hidden">
+                <h4>🌐 Перевод документа</h4>
+                <p class="da-hint">AI переведет документ, сохраняя таблицы и структуру.</p>
 
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="footer-content">
-            <div class="footer-logo">
-                <span class="logo-icon">📄</span> СравнениеДок Платформа
+                <div class="da-edit-actions">
+                    <div class="da-edit-group">
+                        <label>Целевой язык:</label>
+                        <select id="daTranslateLang" class="select-input">
+                            <option value="English">🇬🇧 Английский (English)</option>
+                            <option value="Russian">🇷🇺 Русский (Russian)</option>
+                            <option value="Chinese">🇨🇳 Китайский (Chinese)</option>
+                            <option value="Spanish">🇪🇸 Испанский (Spanish)</option>
+                            <option value="German">🇩🇪 Немецкий (German)</option>
+                            <option value="French">🇫🇷 Французский (French)</option>
+                            <option value="Arabic">🇸🇦 Арабский (Arabic)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="da-custom-prompt-box">
+                    <label for="daTranslatePrompt">📝 Дополнительные указания (опционально)</label>
+                    <textarea id="daTranslatePrompt" class="da-custom-prompt" rows="2"
+                        placeholder="Например: 'Используй техническую терминологию'"></textarea>
+                </div>
+
+                <div class="da-actions-row">
+                    <button class="btn btn-primary" id="daTranslateBtn" onclick="daTranslateDocument()">Перевести
+                        документ</button>
+                </div>
+
+                <div class="da-result-actions hidden" id="daTranslateDownloadActions" style="margin-top: 15px;">
+                    <button class="btn btn-outline" onclick="daDownloadTranslateDocx()">⬇️ Скачать DOCX</button>
+                    <button class="btn btn-outline" onclick="daDownloadTranslatePdf()">⬇️ Скачать PDF</button>
+                </div>
+
+                <div class="da-result-box hidden" id="daTranslateResult"></div>
             </div>
-            <div class="footer-links">
-                <a href="/api/v1/health" target="_blank">Статус системы</a>
-            </div>
-        </div>
-    </footer>
+        </section>
+
+        <!-- Footer -->
+
+    </div>
 
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>

@@ -8,8 +8,10 @@ let state = {
     selectedMergeDocs: [],
     currentMergeId: null,
     currentView: 'compare',
+    currentTool: null,
     lastMergedDocumentId: null,
-    currentUser: null
+    currentUser: null,
+    toolsFile: null // shared file for tools section
 };
 
 // Load current user from oauth2-proxy (via /api/v1/auth/me)
@@ -72,17 +74,19 @@ document.addEventListener('DOMContentLoaded', () => {
     loadCurrentUser();
     loadDocuments();
     setupEventListeners();
+    setupToolsUploadZone();
     showView('compare');
     checkAnonMLStatus(); // Check ML status on load
 });
 
 function setupEventListeners() {
-    // Навигация между вкладками
-    document.querySelectorAll('.nav-link').forEach(link => {
-        link.addEventListener('click', (e) => {
+    // Sidebar navigation
+    document.querySelectorAll('.sidebar-item').forEach(item => {
+        item.addEventListener('click', (e) => {
             e.preventDefault();
-            const view = e.target.dataset.view;
-            if (view) showView(view);
+            const view = item.dataset.view;
+            const tool = item.dataset.tool;
+            if (view) showView(view, tool);
         });
     });
 
@@ -133,21 +137,207 @@ function setupUploadZone(zoneId, inputId) {
     fileInput.addEventListener('change', (e) => uploadFiles(e.target.files));
 }
 
-function showView(viewId) {
+function showView(viewId, toolId) {
     state.currentView = viewId;
+    state.currentTool = toolId || null;
 
     // Скрыть все секции
     document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
     // Показать выбранную
     document.getElementById(viewId)?.classList.remove('hidden');
 
-    // Обновить навигацию
-    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-    document.querySelector(`[data-view="${viewId}"]`)?.classList.add('active');
+    // Обновить sidebar навигацию
+    document.querySelectorAll('.sidebar-item').forEach(l => l.classList.remove('active'));
+    if (toolId) {
+        // Find the sidebar item with matching data-tool
+        document.querySelector(`.sidebar-item[data-tool="${toolId}"]`)?.classList.add('active');
+    } else {
+        document.querySelector(`.sidebar-item[data-view="${viewId}"]`)?.classList.add('active');
+    }
 
-    if (viewId === 'docanalysis') {
+    // For tools view, show the specific tool panel
+    if (viewId === 'tools' && toolId) {
+        // Hide all tool panels
+        document.querySelectorAll('#tools .tool-panel').forEach(p => p.classList.add('hidden'));
+        // Show the target tool panel
+        document.getElementById(toolId)?.classList.remove('hidden');
+
+        // Update section title
+        const titleMap = {
+            'toolAnonymize': 'Обезличивание',
+            'daToolOcr': 'OCR / Распознавание',
+            'daToolAsk': 'Вопрос по документу',
+            'daToolProtocol': 'Протокол / Суммаризация',
+            'daToolTable': 'Извлечение таблиц',
+            'daToolMindmap': 'Ментальные карты',
+            'daToolCheck': 'Проверка и редактирование',
+            'daToolTranslate': 'Перевод документа'
+        };
+        const titleEl = document.getElementById('toolsSectionTitle');
+        if (titleEl) titleEl.textContent = titleMap[toolId] || 'Инструменты';
+
+        // Enable/disable process button for anonymize based on file
+        if (toolId === 'toolAnonymize') {
+            const btn = document.getElementById('processBtnAnon');
+            if (btn) btn.disabled = !state.toolsFile;
+        }
+
         checkAnonMLStatus();
     }
+}
+
+// Sidebar toggle
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.toggle('collapsed');
+    // Save state
+    localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+}
+
+// Restore sidebar state from localStorage
+document.addEventListener('DOMContentLoaded', () => {
+    const collapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+    if (collapsed) {
+        document.getElementById('sidebar')?.classList.add('collapsed');
+    }
+});
+
+// ===================== UNIFIED TOOLS UPLOAD =====================
+function setupToolsUploadZone() {
+    const zone = document.getElementById('uploadZoneTools');
+    const input = document.getElementById('fileInputTools');
+    if (!zone || !input) return;
+
+    zone.addEventListener('click', (e) => {
+        if (e.target.tagName !== 'BUTTON') input.click();
+    });
+    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) handleToolsUpload(e.dataTransfer.files[0]);
+    });
+    input.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) handleToolsUpload(e.target.files[0]);
+    });
+}
+
+async function handleToolsUpload(file) {
+    const allowedExts = ['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.txt'];
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    if (!allowedExts.includes(ext)) {
+        showToast(`Неподдерживаемый формат: ${ext}`, 'error');
+        return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+        showToast('Файл слишком большой (макс. 50 МБ)', 'error');
+        return;
+    }
+
+    // Store file for shared use
+    state.toolsFile = file;
+
+    // Show file info while uploading
+    document.getElementById('toolsFileInfo').classList.remove('hidden');
+    document.getElementById('toolsFileName').textContent = file.name;
+    document.getElementById('toolsFileSize').textContent = formatSize(file.size) + ' — загрузка...';
+    document.getElementById('uploadZoneTools').style.display = 'none';
+
+    // Also set file for anonymizer
+    anonState.selectedFile = file;
+    const processBtnAnon = document.getElementById('processBtnAnon');
+    if (processBtnAnon) processBtnAnon.disabled = false;
+
+    // Upload to docanalysis backend for parsing/tokens
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const resp = await fetch(`${DA_API}/upload`, { method: 'POST', body: formData });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.detail || `HTTP ${resp.status}`);
+        }
+
+        const data = await resp.json();
+        daState.taskId = data.task_id;
+        daState.fileName = data.filename;
+        daState.totalTokens = data.total_tokens || 0;
+
+        document.getElementById('toolsFileSize').textContent = formatSize(data.file_size);
+
+        // Show stats
+        document.getElementById('daSheetsCount').textContent = data.sheets_count;
+        document.getElementById('daTotalTokens').textContent = data.total_tokens.toLocaleString('ru-RU');
+
+        // Calculate cost
+        daUpdateCost();
+
+        document.getElementById('daStatsGrid').classList.remove('hidden');
+
+        // Show sheets details
+        if (data.sheets && data.sheets.length > 0) {
+            const list = document.getElementById('daSheetsList');
+            list.innerHTML = data.sheets.map((s, i) => `
+                <div class="da-sheet-item">
+                    <span class="da-sheet-name">${escapeHtml(s.name)}</span>
+                    <span class="da-sheet-tokens">${s.tokens.toLocaleString('ru-RU')} токенов</span>
+                </div>
+            `).join('');
+            document.getElementById('daSheetsDetails').classList.remove('hidden');
+        }
+
+        showToast(`✓ ${file.name} загружен и проанализирован`, 'success');
+
+    } catch (error) {
+        showToast(`Ошибка загрузки: ${error.message}`, 'error');
+        document.getElementById('uploadZoneTools').style.display = '';
+        document.getElementById('toolsFileInfo').classList.add('hidden');
+        state.toolsFile = null;
+        anonState.selectedFile = null;
+        if (processBtnAnon) processBtnAnon.disabled = true;
+    }
+}
+
+function toolsRemoveFile() {
+    state.toolsFile = null;
+    anonState.selectedFile = null;
+    anonState.currentTaskId = null;
+
+    if (daState.taskId) {
+        fetch(`${DA_API}/${daState.taskId}`, { method: 'DELETE' }).catch(() => { });
+    }
+    daState.taskId = null;
+    daState.fileName = null;
+    daState.totalTokens = 0;
+
+    document.getElementById('uploadZoneTools').style.display = '';
+    document.getElementById('toolsFileInfo').classList.add('hidden');
+    document.getElementById('fileInputTools').value = '';
+    document.getElementById('daStatsGrid')?.classList.add('hidden');
+    document.getElementById('daSheetsDetails')?.classList.add('hidden');
+
+    // Reset anonymizer state
+    document.getElementById('processBtnAnon').disabled = true;
+    document.getElementById('resultsSectionAnon')?.classList.add('hidden');
+    document.getElementById('progressSectionAnon')?.classList.add('hidden');
+
+    // Reset DA tool results
+    document.getElementById('daAskResult')?.classList.add('hidden');
+    document.getElementById('daSummaryResult')?.classList.add('hidden');
+    document.getElementById('daTableResult')?.classList.add('hidden');
+    document.getElementById('daOcrResult')?.classList.add('hidden');
+    document.getElementById('daEditResult')?.classList.add('hidden');
+    document.getElementById('daEditDownloadActions')?.classList.add('hidden');
+    document.getElementById('daTranslateResult')?.classList.add('hidden');
+    document.getElementById('daTranslateDownloadActions')?.classList.add('hidden');
+    document.getElementById('daStructureResult')?.classList.add('hidden');
+    document.getElementById('daStructureDownloadActions')?.classList.add('hidden');
+    document.getElementById('daDownloadProtocolBtn')?.classList.add('hidden');
+    document.getElementById('daDownloadTableBtn')?.classList.add('hidden');
+    document.getElementById('daDownloadOcrBtn')?.classList.add('hidden');
+    document.getElementById('daDownloadOcrPdfBtn')?.classList.add('hidden');
 }
 
 // ===================== INLINE PROGRESS & LOGS =====================
@@ -1271,29 +1461,32 @@ document.addEventListener('DOMContentLoaded', () => {
     checkAnonMLStatus();
 });
 
-function setupAnonEventListeners() {
-    // Upload zone
-    const uploadZone = document.getElementById('uploadZoneAnon');
-    const fileInput = document.getElementById('fileInputAnon');
-    if (uploadZone && fileInput) {
-        uploadZone.addEventListener('click', (e) => {
-            if (e.target.tagName !== 'BUTTON') fileInput.click();
-        });
-        uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); });
-        uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
-        uploadZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadZone.classList.remove('dragover');
-            if (e.dataTransfer.files.length > 0) {
-                handleAnonFile(e.dataTransfer.files[0]);
-            }
-        });
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                handleAnonFile(e.target.files[0]);
-            }
-        });
+function checkAnonMLStatus() {
+    console.log('[DEBUG] Checking status indicators...');
+    const gptStatus = document.getElementById('gptStatusAnon');
+    const visionStatus = document.getElementById('visionStatusAnon');
+
+    // Simulate checking status (in real app, this would be an API call)
+    // For now, we'll set them to active (green pulsing)
+    if (gptStatus) {
+        console.log('[DEBUG] Setting GPT status to active');
+        gptStatus.classList.add('status-active');
+        gptStatus.classList.remove('status-inactive');
+    } else {
+        console.warn('[DEBUG] GPT status element not found');
     }
+
+    if (visionStatus) {
+        console.log('[DEBUG] Setting Vision status to active');
+        visionStatus.classList.add('status-active');
+        visionStatus.classList.remove('status-inactive');
+    } else {
+        console.warn('[DEBUG] Vision status element not found');
+    }
+}
+
+function setupAnonEventListeners() {
+    // Upload zone now handled by unified tools upload (setupToolsUploadZone)
 
     // Remove file button
     const removeBtn = document.getElementById('removeFileAnon');
@@ -1354,45 +1547,8 @@ function setupAnonEventListeners() {
     }
 }
 
-function handleAnonFile(file) {
-    const allowedExts = ['.docx', '.xlsx', '.xls', '.pdf'];
-    const ext = '.' + file.name.split('.').pop().toLowerCase();
-    if (!allowedExts.includes(ext)) {
-        showToast(`Неподдерживаемый формат: ${ext}. Допустимые: DOCX, XLSX, XLS, PDF`, 'error');
-        return;
-    }
-    if (file.size > 50 * 1024 * 1024) {
-        showToast('Файл превышает 50 МБ', 'error');
-        return;
-    }
-
-    anonState.selectedFile = file;
-
-    // Show file info, hide upload zone
-    document.getElementById('uploadZoneAnon').style.display = 'none';
-    const fileInfo = document.getElementById('fileInfoAnon');
-    fileInfo.style.display = 'flex';
-    document.getElementById('fileNameAnon').textContent = file.name;
-    document.getElementById('fileSizeAnon').textContent = formatSize(file.size);
-
-    document.getElementById('processBtnAnon').disabled = false;
-
-    // Reset results
-    document.getElementById('resultsSectionAnon').classList.add('hidden');
-    document.getElementById('progressSectionAnon').classList.add('hidden');
-}
-
-function clearAnonFile() {
-    anonState.selectedFile = null;
-    anonState.currentTaskId = null;
-
-    document.getElementById('uploadZoneAnon').style.display = '';
-    document.getElementById('fileInfoAnon').style.display = 'none';
-    document.getElementById('fileInputAnon').value = '';
-    document.getElementById('processBtnAnon').disabled = true;
-    document.getElementById('resultsSectionAnon').classList.add('hidden');
-    document.getElementById('progressSectionAnon').classList.add('hidden');
-}
+// handleAnonFile and clearAnonFile are now handled by unified tools upload
+// anonState.selectedFile is set by handleToolsUpload()
 
 function applyAnonProfile(options) {
     document.querySelectorAll('.anon-option-card input[type="checkbox"]').forEach(cb => {
@@ -1716,23 +1872,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupDAListeners() {
-    const zone = document.getElementById('uploadZoneDA');
-    const input = document.getElementById('fileInputDA');
-    if (!zone || !input) return;
-
-    zone.addEventListener('click', (e) => {
-        if (e.target.tagName !== 'BUTTON') input.click();
-    });
-    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragover'); });
-    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
-    zone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        zone.classList.remove('dragover');
-        if (e.dataTransfer.files.length > 0) handleDAUpload(e.dataTransfer.files[0]);
-    });
-    input.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) handleDAUpload(e.target.files[0]);
-    });
+    // Upload zone now handled by unified tools upload (setupToolsUploadZone)
 
     // Enter key handlers
     const askInput = document.getElementById('daAskInput');
@@ -1744,80 +1884,11 @@ function setupDAListeners() {
         costInput.addEventListener('input', daUpdateCost);
         costInput.addEventListener('change', daUpdateCost);
     }
+
+    // Navigation Buttons handled by sidebar
 }
 
-async function handleDAUpload(file) {
-    const allowedExts = ['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.txt'];
-    const ext = '.' + file.name.split('.').pop().toLowerCase();
-    if (!allowedExts.includes(ext)) {
-        showToast(`Неподдерживаемый формат: ${ext}`, 'error');
-        return;
-    }
-    if (file.size > 50 * 1024 * 1024) {
-        showToast('Файл слишком большой (макс. 50 МБ)', 'error');
-        return;
-    }
-
-    // Reset previous
-    daResetUI();
-
-    // Show file info while uploading
-    document.getElementById('daFileInfo').classList.remove('hidden');
-    document.getElementById('daFileName').textContent = file.name;
-    document.getElementById('daFileSize').textContent = formatSize(file.size) + ' — загрузка...';
-    document.getElementById('uploadZoneDA').style.display = 'none';
-
-    try {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const resp = await fetch(`${DA_API}/upload`, { method: 'POST', body: formData });
-        if (!resp.ok) {
-            const err = await resp.json().catch(() => ({}));
-            throw new Error(err.detail || `HTTP ${resp.status}`);
-        }
-
-        const data = await resp.json();
-        daState.taskId = data.task_id;
-        daState.fileName = data.filename;
-        daState.totalTokens = data.total_tokens || 0;
-
-        document.getElementById('daFileSize').textContent = formatSize(data.file_size);
-
-        // Show stats
-        document.getElementById('daSheetsCount').textContent = data.sheets_count;
-        document.getElementById('daTotalTokens').textContent = data.total_tokens.toLocaleString('ru-RU');
-
-        // Calculate cost
-        daUpdateCost();
-
-        document.getElementById('daStatsGrid').classList.remove('hidden');
-
-        // Show sheets details
-        if (data.sheets && data.sheets.length > 0) {
-            const list = document.getElementById('daSheetsList');
-            list.innerHTML = data.sheets.map((s, i) => `
-                <div class="da-sheet-item">
-                    <span class="da-sheet-name">${escapeHtml(s.name)}</span>
-                    <span class="da-sheet-tokens">${s.tokens.toLocaleString('ru-RU')} токенов</span>
-                </div>
-            `).join('');
-            document.getElementById('daSheetsDetails').classList.remove('hidden');
-        }
-
-        // Show tools panel
-        document.getElementById('daToolsPanel').classList.remove('hidden');
-
-        // Open details tags by default? They are open in HTML.
-
-        showToast(`✓ ${file.name} загружен и проанализирован`, 'success');
-
-    } catch (error) {
-        showToast(`Ошибка загрузки: ${error.message}`, 'error');
-        document.getElementById('uploadZoneDA').style.display = '';
-        document.getElementById('daFileInfo').classList.add('hidden');
-    }
-}
+// handleDAUpload is now handled by unified tools upload (handleToolsUpload)
 
 function daUpdateCost() {
     if (!daState.totalTokens) return;
@@ -1845,22 +1916,28 @@ function daRemoveDocument() {
 }
 
 function daResetUI() {
-    document.getElementById('daFileInfo')?.classList.add('hidden');
-    document.getElementById('daStatsGrid')?.classList.add('hidden');
-    document.getElementById('daSheetsDetails')?.classList.add('hidden');
-    document.getElementById('daToolsPanel')?.classList.add('hidden');
-
+    // Reset tool results (file info/stats managed by toolsRemoveFile)
     document.getElementById('daAskResult')?.classList.add('hidden');
     document.getElementById('daSummaryResult')?.classList.add('hidden');
     document.getElementById('daTableResult')?.classList.add('hidden');
+    document.getElementById('daOcrResult')?.classList.add('hidden');
+    document.getElementById('daEditResult')?.classList.add('hidden');
+    document.getElementById('daEditDownloadActions')?.classList.add('hidden');
+    document.getElementById('daTranslateResult')?.classList.add('hidden');
+    document.getElementById('daTranslateDownloadActions')?.classList.add('hidden');
+    document.getElementById('daStructureResult')?.classList.add('hidden');
+    document.getElementById('daStructureDownloadActions')?.classList.add('hidden');
 
     // Reset buttons
     document.getElementById('daDownloadProtocolBtn')?.classList.add('hidden');
     document.getElementById('daDownloadTableBtn')?.classList.add('hidden');
+    document.getElementById('daDownloadOcrBtn')?.classList.add('hidden');
+    document.getElementById('daDownloadOcrPdfBtn')?.classList.add('hidden');
 }
 
-function _daGetCustomPrompt() {
-    return (document.getElementById('daCustomPrompt')?.value || '').trim();
+// Helper to get specific prompt
+function _daGetPrompt(id) {
+    return (document.getElementById(id)?.value || '').trim();
 }
 
 // ---- Ask ----
@@ -1879,7 +1956,7 @@ async function daAsk() {
         const resp = await fetch(`${DA_API}/ask/${daState.taskId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question, custom_prompt: _daGetCustomPrompt() }),
+            body: JSON.stringify({ question, custom_prompt: _daGetPrompt('daAskPrompt') }),
         });
         if (!resp.ok) throw new Error((await resp.json().catch(() => ({}))).detail || 'Ошибка');
         const data = await resp.json();
@@ -1909,7 +1986,7 @@ async function daSummarize() {
         const resp = await fetch(`${DA_API}/summarize/${daState.taskId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ custom_prompt: _daGetCustomPrompt() }),
+            body: JSON.stringify({ custom_prompt: _daGetPrompt('daSummarizePrompt') }),
         });
         if (!resp.ok) throw new Error((await resp.json().catch(() => ({}))).detail || 'Ошибка');
         const data = await resp.json();
@@ -1973,7 +2050,7 @@ async function daGenerateTable() {
         const resp = await fetch(`${DA_API}/table/${daState.taskId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ custom_prompt: _daGetCustomPrompt() }),
+            body: JSON.stringify({ custom_prompt: _daGetPrompt('daTablePrompt') }),
         });
         if (!resp.ok) throw new Error((await resp.json().catch(() => ({}))).detail || 'Ошибка');
         const data = await resp.json();
@@ -2185,7 +2262,7 @@ async function daGenerateStructure() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 mode: mode,
-                custom_prompt: _daGetCustomPrompt()
+                custom_prompt: _daGetPrompt('daStructurePrompt')
             }),
         });
 
@@ -2315,7 +2392,7 @@ async function daEditDocument() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 mode: mode,
-                custom_prompt: _daGetCustomPrompt()
+                custom_prompt: _daGetPrompt('daEditPrompt')
             }),
         });
 
@@ -2408,34 +2485,112 @@ async function daDownloadEditPdf() {
 }
 
 
-function daResetUI() {
-    document.getElementById('daFileInfo')?.classList.add('hidden');
-    document.getElementById('daStatsGrid')?.classList.add('hidden');
 
-    // Reset sheets details
-    const sheetsDetails = document.getElementById('daSheetsDetails');
-    if (sheetsDetails) {
-        sheetsDetails.classList.add('hidden');
-        sheetsDetails.removeAttribute('open'); // Collapse it
+
+// ---- Translation ----
+async function daTranslateDocument() {
+    if (!daState.taskId) { showToast('Сначала загрузите документ', 'warning'); return; }
+
+    const lang = document.getElementById('daTranslateLang').value;
+    const result = document.getElementById('daTranslateResult');
+    const btn = document.getElementById('daTranslateBtn');
+    const downloadActions = document.getElementById('daTranslateDownloadActions');
+
+    result.innerHTML = '<div class="da-loading">🌐 AI переводит документ...</div>';
+    result.classList.remove('hidden');
+    downloadActions.classList.add('hidden');
+    btn.disabled = true;
+
+    try {
+        const resp = await fetch(`${DA_API}/translate/${daState.taskId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                target_language: lang,
+                custom_prompt: _daGetPrompt('daTranslatePrompt')
+            }),
+        });
+
+        if (!resp.ok) throw new Error((await resp.json().catch(() => ({}))).detail || 'Ошибка перевода');
+        const data = await resp.json();
+
+        result.innerHTML = `<div class="da-answer">
+            <div class="alert alert-success">✅ Перевод завершен (${data.target_language})</div>
+            <div class="da-preview" style="max-height: 400px; overflow: auto; opacity: 1.0; font-size: 0.95em; background: #fff; padding: 10px; border: 1px solid #eee;">
+                ${_daFormatMarkdown(data.translated_text)}
+            </div>
+            <div class="da-meta" style="text-align: right; margin-top: 10px; font-size: 0.85em; color: #666;">
+                Токенов: <b>${data.tokens_used || 0}</b> • 
+                Время: <b>${data.processing_time || 0} сек</b>
+            </div>
+        </div>`;
+
+        downloadActions.classList.remove('hidden');
+
+    } catch (error) {
+        result.innerHTML = `<div class="da-error">❌ ${escapeHtml(error.message)}</div>`;
+    } finally {
+        btn.disabled = false;
     }
-
-    document.getElementById('daToolsPanel')?.classList.add('hidden');
-
-    document.getElementById('daAskResult')?.classList.add('hidden');
-    document.getElementById('daSummaryResult')?.classList.add('hidden');
-    document.getElementById('daTableResult')?.classList.add('hidden');
-    document.getElementById('daOcrResult')?.classList.add('hidden');
-    document.getElementById('daEditResult')?.classList.add('hidden');
-    document.getElementById('daEditDownloadActions')?.classList.add('hidden');
-
-    // Reset buttons
-    document.getElementById('daDownloadProtocolBtn')?.classList.add('hidden');
-    document.getElementById('daDownloadTableBtn')?.classList.add('hidden');
-    document.getElementById('daDownloadOcrBtn')?.classList.add('hidden');
-    document.getElementById('daDownloadOcrPdfBtn')?.classList.add('hidden');
 }
 
-// ---- Markdown formatting ----
+async function daDownloadTranslateDocx() {
+    if (!daState.taskId) return;
+    try {
+        const resp = await fetch(`${DA_API}/download/${daState.taskId}/translate_docx`);
+        if (!resp.ok) throw new Error('Ошибка скачивания');
+        const blob = await resp.blob();
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+
+        let filename = "Translated.docx";
+        const contentDisposition = resp.headers.get('Content-Disposition');
+        if (contentDisposition) {
+            const utf8Match = contentDisposition.match(/filename\*=UTF-8''(.+)/i);
+            if (utf8Match) filename = decodeURIComponent(utf8Match[1]);
+        }
+
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+    } catch (e) {
+        showToast('Ошибка скачивания: ' + e.message, 'error');
+    }
+}
+
+async function daDownloadTranslatePdf() {
+    if (!daState.taskId) return;
+    try {
+        const resp = await fetch(`${DA_API}/download/${daState.taskId}/translate_pdf`);
+        if (!resp.ok) throw new Error('Ошибка скачивания');
+        const blob = await resp.blob();
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+
+        let filename = "Translated.pdf";
+        const contentDisposition = resp.headers.get('Content-Disposition');
+        if (contentDisposition) {
+            const utf8Match = contentDisposition.match(/filename\*=UTF-8''(.+)/i);
+            if (utf8Match) filename = decodeURIComponent(utf8Match[1]);
+        }
+
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+    } catch (e) {
+        showToast('Ошибка скачивания: ' + e.message, 'error');
+    }
+}
+
+
 function _daFormatMarkdown(text) {
     if (!text) return '';
     let html = escapeHtml(text);

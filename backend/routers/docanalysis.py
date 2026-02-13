@@ -1400,7 +1400,7 @@ async def generate_structure_code(task_id: str, request: StructureRequest):
     base_prompt = "Проанализируй текст и создай структуру на языке Mermaid.js. Верни ТОЛЬКО код. НЕ используй markdown обертку (```). \nВАЖНО: \n1. Избегай спецсимволов в тексте узлов (скобки, кавычки) или экранируй их.\n2. Текст в узлах должен быть кратким.\n3. Если используешь graph/flowchart, текст в узлах бери в кавычки, например: id[\"Текст\"].\n"
     
     if request.mode == "mindmap":
-        prompt = base_prompt + "Создай ментальную карту (mindmap). Синтаксис:\nmindmap\n  root((Тема))\n    Ветвь 1\n      Подветвь\n"
+        prompt = base_prompt + "Создай ментальную карту (mindmap). ВАЖНО: Используй кавычки для текста, чтобы избежать ошибок с символами ( ) [ ]. Пример: id[\"Текст узла\"]. Каждый узел строго с новой строки с отступом.\nСинтаксис:\nmindmap\n  root((\"Тема\"))\n    [\"Ветвь 1\"]\n      (\"Подветвь\")\n"
     elif request.mode == "flowchart":
         prompt = base_prompt + "Создай блок-схему (flowchart TD). Используй id[\"Текст\"] для узлов. Связи -->."
     elif request.mode == "graph":
@@ -1441,3 +1441,108 @@ async def delete_task(task_id: str):
         del tasks[task_id]
         return {"status": "deleted"}
     raise HTTPException(status_code=404, detail="Документ не найден")
+
+
+class TranslateRequest(BaseModel):
+    target_language: str
+    custom_prompt: Optional[str] = None
+
+
+@router.post("/translate/{task_id}")
+async def translate_document(task_id: str, request: TranslateRequest):
+    """Translate document using Qwen-3VL."""
+    if task_id not in tasks:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    task = tasks[task_id]
+    
+    # Use OCR markdown if available, otherwise original content
+    content = task.get("ocr_markdown") or task.get("content_text") or task.get("markdown")
+    if not content:
+        content = _full_text(task)
+        
+    if not content:
+        raise HTTPException(status_code=400, detail="Не найден текст для перевода.")
+
+    import time
+    start_time = time.time()
+
+    prompt = f"Ты профессиональный переводчик. Переведи этот текст на {request.target_language}.\n\n"
+    prompt += "ВАЖНО:\n1. Полностью сохрани структуру Markdown (заголовки, списки, таблицы).\n"
+    prompt += "2. Не переводи код, имена переменных и технические идентификаторы, если это не требуется.\n"
+    prompt += "3. Сохрани все таблицы в исходном виде (Markdown tables).\n"
+    prompt += "4. Стиль: официальный, профессиональный.\n"
+
+    if request.custom_prompt:
+        prompt += f"\nДополнительные указания: {request.custom_prompt}"
+
+    prompt += f"\n\n=== ТЕКСТ ДЛЯ ПЕРЕВОДА ===\n\n{content}\n\n=== КОНЕЦ ТЕКСТА ===\n\nВерни ТОЛЬКО переведенный текст в формате Markdown."
+
+    try:
+        translated_text = _call_gpt_sync(prompt, max_tokens=4096, temperature=0.2)
+        
+        task["translated_text"] = translated_text
+        task["target_language"] = request.target_language
+        
+        processing_time = time.time() - start_time
+        
+        return {
+            "status": "success",
+            "translated_text": translated_text,
+            "target_language": request.target_language,
+            "tokens_used": _count_tokens(translated_text),
+            "processing_time": round(processing_time, 2)
+        }
+    except Exception as e:
+        print(f"Translation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка перевода: {str(e)}")
+
+
+@router.get("/download/{task_id}/translate_docx")
+async def download_translate_docx(task_id: str):
+    """Download translated document as DOCX."""
+    task = tasks.get(task_id)
+    if not task or "translated_text" not in task:
+        raise HTTPException(status_code=404, detail="Translation not found")
+    
+    md_text = task["translated_text"]
+    lang = task.get("target_language", "Translated")
+    filename = f"{lang}_{task['filename']}.docx"
+    
+    from io import BytesIO
+    from urllib.parse import quote
+    
+    output = BytesIO()
+    _markdown_to_docx(md_text, output)
+    output.seek(0)
+    
+    return Response(
+        content=output.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"}
+    )
+
+
+@router.get("/download/{task_id}/translate_pdf")
+async def download_translate_pdf(task_id: str):
+    """Download translated document as PDF."""
+    task = tasks.get(task_id)
+    if not task or "translated_text" not in task:
+        raise HTTPException(status_code=404, detail="Translation not found")
+    
+    md_text = task["translated_text"]
+    lang = task.get("target_language", "Translated")
+    filename = f"{lang}_{task['filename']}.pdf"
+    
+    from io import BytesIO
+    from urllib.parse import quote
+    
+    output = BytesIO()
+    _markdown_to_pdf(md_text, output)
+    output.seek(0)
+    
+    return Response(
+        content=output.getvalue(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"}
+    )
